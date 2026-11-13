@@ -1,0 +1,20 @@
+[project]
+name = "aimind"
+version = "0.9.0"
+description = "AI 录音思考助手（电脑端服务）"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["E702", "B008", "B904", "B905"]   # 一行多条短语句；FastAPI 的 File(...)；except 里 raise；zip strict
+
+[tool.ruff.lint.per-file-ignores]
+"aimind/review/prompts.py" = ["E501"]   # 提示词是长段中文
+"packaging/setup_app.py" = ["E501"]     # 卸载脚本模板里的长行中文提示

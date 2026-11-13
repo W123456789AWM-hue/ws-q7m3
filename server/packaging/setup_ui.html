@@ -1,0 +1,102 @@
+<!doctype html>
+<!-- 安装程序界面（setup_app.py 用 pywebview 打开）。风格和主程序一致：深色、细网格、青色强调 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>安装 AI 录音思考助手</title>
+<style>
+  :root{--bg:#080b12;--line:rgba(148,163,184,.14);--line2:rgba(148,163,184,.26);--ink:#e7edf5;--mute:#8592a6;--dim:#566275;
+    --accent:#3fe0d0;--accent-ink:#04211e;--glow:rgba(63,224,208,.35);--rec:#ff4d61;
+    --mono:"Cascadia Mono",Consolas,"Microsoft YaHei UI",monospace}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;user-select:none}
+  body{font:14px/1.65 "Microsoft YaHei UI","Segoe UI",system-ui,sans-serif;color:var(--ink);
+    background:radial-gradient(700px 300px at 80% -10%,rgba(63,224,208,.10),transparent 60%),
+      linear-gradient(var(--line) 1px,transparent 1px) 0 0/32px 32px,
+      linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/32px 32px,var(--bg);
+    display:flex;flex-direction:column}
+  .top{display:flex;align-items:center;justify-content:center;height:170px;border-bottom:1px solid var(--line)}
+  .top img{max-height:120px;max-width:70%;filter:drop-shadow(0 0 18px rgba(255,255,255,.06))}
+  .body{flex:1;padding:20px 34px 0}
+  .page{display:none}.page.on{display:block;animation:in .25s ease}
+  @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h1{font-size:17px;margin:0 0 4px;font-weight:600}
+  h1 small{font-family:var(--mono);font-size:12px;color:var(--mute);font-weight:400;margin-left:8px}
+  p{margin:0 0 10px;color:var(--mute);font-size:13px}
+  .path{display:flex;gap:8px;margin:10px 0 12px}
+  .path input{flex:1;font:inherit;font-family:var(--mono);font-size:12.5px;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);
+    background:rgba(0,0,0,.3);color:var(--ink);outline:none}
+  label.ck{display:inline-flex;align-items:center;gap:8px;margin:2px 22px 2px 0;font-size:13px;color:#c4cedb;cursor:pointer}
+  label.ck input{appearance:none;width:30px;height:17px;border-radius:99px;background:rgba(148,163,184,.28);position:relative;cursor:pointer;margin:0;transition:background .15s}
+  label.ck input::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:transform .15s}
+  label.ck input:checked{background:var(--accent)}label.ck input:checked::after{transform:translateX(13px)}
+  .bar{height:6px;border-radius:6px;background:rgba(148,163,184,.15);overflow:hidden;margin:26px 0 10px}
+  .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#9cf7ee);box-shadow:0 0 14px var(--glow);transition:width .2s}
+  .msg{font-family:var(--mono);font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .err{color:var(--rec);font-size:13px;margin-top:10px;white-space:pre-wrap}
+  .foot{display:flex;align-items:center;gap:10px;padding:14px 34px 18px}
+  .foot .note{flex:1;font-size:12px;color:var(--dim)}
+  button{font:inherit;font-size:13.5px;cursor:pointer;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--ink);
+    padding:7px 18px;border-radius:9px;transition:all .15s}
+  button:hover{border-color:rgba(63,224,208,.5)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;box-shadow:0 6px 22px -8px var(--glow)}
+  button:disabled{opacity:.4;pointer-events:none}
+  .ok{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);align-items:center;justify-content:center;font-weight:700;margin-right:8px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="top"><img src="setup_logo.png" alt=""></div>
+<div class="body">
+  <div class="page on" id="p1">
+    <h1>安装 AI 录音思考助手<small id="ver"></small></h1>
+    <p id="intro">全天录音 → AI 听录音做发散复盘。装好后从桌面或开始菜单打开。</p>
+    <div class="path"><input id="dir" readonly><button onclick="choose()">更改位置</button></div>
+    <label class="ck"><input type="checkbox" id="desktop" checked>桌面快捷方式</label>
+    <label class="ck"><input type="checkbox" id="startmenu" checked>开始菜单</label>
+    <label class="ck"><input type="checkbox" id="autostart">开机自动启动</label>
+  </div>
+  <div class="page" id="p2">
+    <h1>正在安装…</h1>
+    <p>请稍候，大约需要 10–30 秒。</p>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="msg" id="msg">准备中…</div>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="page" id="p3">
+    <h1><span class="ok">✓</span>安装完成</h1>
+    <p>以后从桌面或开始菜单打开「AI 录音思考助手」。第一次打开时 Windows 防火墙会询问，请点「允许访问」，手机才能连进来。</p>
+    <p id="dataNote"></p>
+  </div>
+</div>
+<div class="foot">
+  <span class="note" id="note">不需要管理员权限 · 卸载：设置 → 应用</span>
+  <button id="bCancel" onclick="pywebview.api.close()">取消</button>
+  <button id="bMain" class="primary" onclick="go()">安装</button>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  let stage = 1;
+  function show(n) { stage = n; document.querySelectorAll('.page').forEach((p, i) => p.classList.toggle('on', i === n - 1)); }
+  function progress(pct, msg) { $('bar').style.width = pct + '%'; if (msg) $('msg').textContent = msg; }
+  async function init() {
+    const i = await pywebview.api.info();
+    $('dir').value = i.dir; $('ver').textContent = 'v' + i.version;
+    if (i.old) { $('intro').textContent = `检测到已经装了 v${i.old}，将升级到 v${i.version}。你的录音、复盘和设置不会受影响。`; $('bMain').textContent = '升级'; }
+    $('note').textContent = `约 ${i.size_mb} MB · 不需要管理员权限 · 卸载：设置 → 应用`;
+    $('dataNote').textContent = `你的录音、复盘和设置保存在 ${i.data}（卸载程序也不会删除）。`;
+  }
+  async function choose() { $('dir').value = await pywebview.api.choose(); }
+  async function go() {
+    if (stage === 3) return pywebview.api.launch();
+    if (stage !== 1) return;
+    show(2); $('bMain').disabled = true; $('bCancel').disabled = true; $('err').textContent = '';
+    const r = await pywebview.api.install({desktop: $('desktop').checked, startmenu: $('startmenu').checked, autostart: $('autostart').checked});
+    if (r.ok) { progress(100, '完成'); setTimeout(() => { show(3); $('bMain').disabled = false; $('bMain').textContent = '打开 AI 录音思考助手';
+      $('bCancel').disabled = false; $('bCancel').textContent = '关闭'; }, 350); }
+    else { $('err').textContent = '安装失败：' + r.msg; $('bMain').disabled = false; $('bMain').textContent = '重试'; $('bCancel').disabled = false;
+      stage = 1; setTimeout(() => show(1), 3000); }
+  }
+  window.addEventListener('pywebviewready', init);
+</script>
+</body>
+</html>

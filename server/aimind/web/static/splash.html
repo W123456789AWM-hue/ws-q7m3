@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- 桌面程序的启动动画（Mac 用：desktop_app.py 用透明无边框窗口打开它；Windows 用 splash_win.py 原生播放）。
+     动画放完或点一下就进入主窗口。splash.webp 由 packaging/make_splash.py 生成：透明背景、60 帧。
+     ?speed=1.5 调速度：系统支持 ImageDecoder 时逐帧画到 canvas 上（能调速）；不支持就按原速播放。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AI 录音思考助手</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
+  img, canvas { width: 100%; height: auto; display: block; transition: opacity .35s ease; }
+  body.out img, body.out canvas { opacity: 0; }
+</style>
+</head>
+<body title="点一下跳过">
+<script>
+  const DURATION = 7950, HOLD = 250;                 // 原速总时长（毫秒）：477 帧 / 60fps
+  const clamp = v => Math.min(4, Math.max(0.25, Number(v) || 1));
+  let speed = clamp(new URLSearchParams(location.search).get('speed'));
+  let finished = false;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    document.body.classList.add('out');
+    setTimeout(() => window.pywebview?.api?.done(), 350);
+  }
+  document.body.addEventListener('click', finish);
+  document.addEventListener('keydown', finish);
+
+  function plainImg() {                               // 原速播放
+    const img = new Image();
+    img.draggable = false;
+    img.onload = () => setTimeout(finish, DURATION + HOLD);
+    img.onerror = finish;
+    img.src = 'splash.webp?' + Date.now();
+    document.body.appendChild(img);
+  }
+
+  async function decoded() {                          // 逐帧解码，按速度播放
+    const data = await (await fetch('splash.webp')).arrayBuffer();
+    const dec = new ImageDecoder({data, type: 'image/webp'});
+    await dec.tracks.ready;
+    const n = dec.tracks.selectedTrack.frameCount;
+    const first = (await dec.decode({frameIndex: 0})).image;
+    const cv = document.createElement('canvas');
+    cv.width = first.displayWidth; cv.height = first.displayHeight;
+    document.body.appendChild(cv);
+    const ctx = cv.getContext('2d');
+    let due = performance.now();
+    for (let i = 0; i < n && !finished; i++) {
+      const f = i ? (await dec.decode({frameIndex: i})).image : first;
+      const wait = due - performance.now();
+      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(f, 0, 0);
+      due += (f.duration || 16667) / 1000 / speed;   // duration 单位是微秒
+      f.close();
+    }
+    await new Promise(r => setTimeout(r, Math.max(0, due - performance.now()) + HOLD / speed));
+    finish();
+  }
+
+  function begin() {
+    if (speed !== 1 && 'ImageDecoder' in window) decoded().catch(() => { document.body.innerHTML = ''; plainImg(); });
+    else plainImg();
+  }
+  // 速度由桌面程序通过 pywebview 传进来（等它准备好，最多等 1 秒）
+  let started = false;
+  const go = async () => {
+    if (started) return; started = true;
+    try { if (window.pywebview?.api?.speed) speed = clamp(await window.pywebview.api.speed()); } catch (e) {}
+    begin();
+  };
+  window.addEventListener('pywebviewready', go);
+  setTimeout(go, 1000);
+  if (window.pywebview?.api?.speed) go();
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+# 云端一次打出四个平台的安装包（不用自己的电脑装任何东西，也不需要 Mac）：
+#   电脑端：Windows 安装包 + 绿色版、Mac（苹果芯片 / Intel）dmg
+#   手机端：安卓 APK、iPhone 未签名 IPA
+# 用法：把整个 aimind 文件夹上传到 GitHub（私有仓库即可）→ 仓库的 Actions 页面 → Build all → Run workflow，
+# 跑完后在运行结果页面底部的 Artifacts 里下载。
+name: Build all
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows:
+    name: 电脑端 Windows
+    runs-on: windows-latest
+    defaults: { run: { working-directory: server } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt -r requirements-dev.txt pyinstaller pywebview pillow
+      - run: python -m pytest -q
+      - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/aimind.spec
+      - name: 绿色版 zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build/dist/AIMind -DestinationPath dist/AIMind-Windows.zip
+      - name: 安装程序 AIMind-Setup.exe
+        shell: pwsh
+        run: |
+          $env:AIMIND_PAYLOAD = "$PWD\dist\AIMind-Windows.zip"
+          pyinstaller --noconfirm --distpath dist --workpath build/setup_work packaging/setup.spec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: server/dist/*
+          if-no-files-found: error
+
+  mac:
+    name: 电脑端 Mac (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, arch: apple-silicon }
+          - { runner: macos-15-intel, arch: intel }
+    runs-on: ${{ matrix.runner }}
+    defaults: { run: { working-directory: server } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: bash packaging/build_mac.sh
+      - run: mv dist/AIMind-Mac.dmg "dist/AIMind-Mac-${{ matrix.arch }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-${{ matrix.arch }}
+          path: server/dist/*.dmg
+          if-no-files-found: error
+
+  android:
+    name: 手机端 安卓
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      # 固定的签名密钥：以后每次打的包都能直接覆盖安装，不丢数据
+      - run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
+      - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build apk --release --split-per-abi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android-apk
+          path: mobile/build/app/outputs/flutter-apk/*-release.apk
+          if-no-files-found: error
+
+  ios:
+    name: 手机端 iPhone（未签名）
+    runs-on: macos-latest
+    defaults: { run: { working-directory: mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
+      - run: bash scripts/setup_ios.sh
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign
+      - run: |
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry ai_mind_unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-ios-unsigned-ipa
+          path: mobile/ai_mind_unsigned.ipa
+          if-no-files-found: error

@@ -1,0 +1,4 @@
+# 只有在设置里选“先在本机识别成文字”时才需要：
+#   Windows: .venv\Scripts\pip install -r requirements-local.txt
+#   Mac:     .venv/bin/pip install -r requirements-local.txt
+sherpa-onnx>=1.12
