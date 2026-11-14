@@ -58,7 +58,9 @@ def test_two_devices_one_session(client):
     assert names == {"厨房手机", "办公室 iPad"}
     assert len(s["paragraphs"]) >= 4
     starts = [p["start_t"] for p in s["paragraphs"]]
-    assert all(r["status"] == "done" for r in s["reviews"]) and s["reviews"]
+    # 失败时把每轮复盘的错误原因打出来（云端偶发失败时好查）
+    assert all(r["status"] == "done" for r in s["reviews"]) and s["reviews"], \
+        [(r["status"], r.get("error")) for r in s["reviews"]]
     assert all("听写" in p["text"] for p in s["paragraphs"]), "AI 听写的文字要填回段落"
     assert any("厨房手机" in x for x in mock_openai.STATS["labels"])
     assert any("办公室 iPad" in x for x in mock_openai.STATS["labels"])

@@ -10,8 +10,20 @@ import httpx
 from . import usage
 
 TIMEOUT = httpx.Timeout(120.0, connect=15.0)
-# 共用一个连接池：连续调用时不用每次重新握手（HTTPS 握手要几百毫秒）
-HTTP = httpx.Client(timeout=TIMEOUT, limits=httpx.Limits(max_keepalive_connections=4))
+class _Client(httpx.Client):
+    """连接池里的旧连接可能刚好被服务器关掉（空闲几秒就关，各家不同）：
+    这时请求还没被处理就断了，自动换新连接重发一次（不会重复计费）"""
+
+    def post(self, *a, **k):
+        try:
+            return super().post(*a, **k)
+        except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.WriteError):
+            return super().post(*a, **k)
+
+
+# 共用一个连接池：连续调用时不用每次重新握手（HTTPS 握手要几百毫秒）。
+# 空闲 3 秒就不再复用：比常见服务器的空闲超时（5 秒起）短，避免拿到快被关掉的连接
+HTTP = _Client(timeout=TIMEOUT, limits=httpx.Limits(max_keepalive_connections=4, keepalive_expiry=3))
 
 
 def _raise(r: httpx.Response, what: str):

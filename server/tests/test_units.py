@@ -239,3 +239,24 @@ def test_feedback_redacts_secrets():
     from aimind.feedback import redact
     s = redact('api_key: "sk-abcDEF1234567890xyz" token=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 正常的话 v0.9.5')
     assert "sk-abc" not in s and "ghp_aaaa" not in s and "正常的话 v0.9.5" in s
+
+
+def test_ai_request_retries_once_when_pooled_connection_was_closed(monkeypatch):
+    """连接池里的旧连接被服务器关掉了：自动重发一次，不让这一轮复盘失败"""
+    import httpx
+
+    from aimind.review import llm
+    calls = []
+
+    def flaky(self, *a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+        return "ok"
+
+    monkeypatch.setattr(httpx.Client, "post", flaky)
+    assert llm.HTTP.post("http://x") == "ok" and len(calls) == 2
+    calls.clear()
+    monkeypatch.setattr(httpx.Client, "post", lambda *a, **k: (_ for _ in ()).throw(httpx.ReadTimeout("慢")))
+    with pytest.raises(httpx.ReadTimeout):       # 超时（服务器可能已经在处理）不重发，免得重复计费
+        llm.HTTP.post("http://x")
