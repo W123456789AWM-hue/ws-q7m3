@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../core/util.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 /// 复盘报告：日复盘 / 月复盘 / 年复盘（电脑上按设置自动生成，这里查看或手动生成）
@@ -48,7 +49,7 @@ class _DailyPageState extends State<DailyPage> {
     });
     final key = _key, period = _period;
     try {
-      final md = await widget.app.api.report(period, key);
+      final md = await widget.app.report(period, key);
       if (mounted && key == _key && period == _period) setState(() => _md = md);
     } catch (e) {
       if (mounted) {
@@ -97,7 +98,7 @@ class _DailyPageState extends State<DailyPage> {
       _error = '';
     });
     try {
-      final md = await widget.app.api.report(_period, _key, make: true);
+      final md = await widget.app.report(_period, _key, make: true);
       if (mounted) setState(() => _md = md);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -124,6 +125,7 @@ class _DailyPageState extends State<DailyPage> {
                 ButtonSegment(value: 'month', label: Text('月')),
                 ButtonSegment(value: 'year', label: Text('年')),
               ],
+              showSelectedIcon: false,
               selected: {_period},
               onSelectionChanged: (v) {
                 _period = v.first;
@@ -167,11 +169,11 @@ class _DailyPageState extends State<DailyPage> {
                 padding: const EdgeInsets.all(16),
                 child: Text(_error, style: TextStyle(color: theme.colorScheme.error))),
           if (_md.isNotEmpty)
-            SummaryCard(_md, title: '$_key $name')
+            Appear(key: ValueKey('$_period$_key${_md.length}'), child: SummaryCard(_md, title: '$_key $name'))
           else if (_error.isEmpty && !_loading)
             Padding(
               padding: const EdgeInsets.all(32),
-              child: Text(_emptyHints[_period]!,
+              child: Text(widget.app.standalone ? '还没有$name。\n点上面的按钮，让 AI 现在生成。' : _emptyHints[_period]!,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: theme.colorScheme.outline, height: 1.7)),
             ),

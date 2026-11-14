@@ -15,6 +15,30 @@ const _step = <int>[
 ];
 const _idx = <int>[-1, -1, -1, -1, 2, 4, 6, 8];
 
+/// 还原成 16bit 小端录音（手机独立复盘时，之前按压缩格式存下的片要先还原）
+Uint8List adpcmDecode(Uint8List data) {
+  if (data.length < 4) return Uint8List(0);
+  final n = (data.length - 4) * 2;
+  final out = ByteData(n * 2);
+  var pred = ByteData.sublistView(data).getInt16(0, Endian.little);
+  var idx = data[2].clamp(0, 88);
+  for (var i = 0; i < n; i++) {
+    final b = data[4 + (i >> 1)];
+    final code = i.isEven ? b & 0x0F : b >> 4;
+    final step = _step[idx];
+    var d = step >> 3;
+    if (code & 4 != 0) d += step;
+    if (code & 2 != 0) d += step >> 1;
+    if (code & 1 != 0) d += step >> 2;
+    pred = (code & 8) != 0 ? pred - d : pred + d;
+    if (pred > 32767) pred = 32767;
+    if (pred < -32768) pred = -32768;
+    idx = (idx + _idx[code & 7]).clamp(0, 88);
+    out.setInt16(i * 2, pred, Endian.little);
+  }
+  return out.buffer.asUint8List();
+}
+
 /// [pcm]：16bit 小端单声道，长度为偶数
 Uint8List adpcmEncode(Uint8List pcm) {
   final n = pcm.length ~/ 2;

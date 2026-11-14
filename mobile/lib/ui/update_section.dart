@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../android_bridge.dart';
 import '../app_state.dart';
+import '../core/updater.dart';
 
 /// 这个 App 的版本号：云端打包时用 --dart-define=APP_VERSION=… 传进来（和电脑端同一个版本号）
 const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.9.2');
@@ -21,7 +22,8 @@ bool newer(String a, String b) {
   return false;
 }
 
-/// 设置页里的「软件更新」：通过电脑检查新版本；安卓下载后打开系统安装界面，iPhone 只提示
+/// 设置页里的「软件更新」：连着电脑就通过电脑检查和下载（局域网快）；没连电脑 / 独立模式就直接连发布服务器。
+/// 两条路都验数字签名、核对 sha256。安卓下载后打开系统安装界面，iPhone 只提示
 class UpdateSection extends StatefulWidget {
   const UpdateSection({super.key, required this.app});
   final AppState app;
@@ -41,21 +43,60 @@ class _UpdateSectionState extends State<UpdateSection> {
     return latest.isNotEmpty && newer(latest, appVersion) && _info?['asset'] != null;
   }
 
+  bool _direct = false; // 这次是直接连发布服务器（没经过电脑）
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.app.newVersion.isNotEmpty) _check(); // 启动时已经发现有新版本：直接把详情显示出来
+  }
+
+  /// 直接从发布服务器拿清单，整理成和电脑接口一样的格式
+  Future<Map<String, dynamic>> _directInfo(String abi) async {
+    final m = await MobileUpdater(mirror: widget.app.settings.updateMirror).fetchManifest();
+    final assets = Map<String, dynamic>.from(m['assets'] as Map);
+    final key = Platform.isIOS
+        ? (assets.containsKey('ios-signed') ? 'ios-signed' : 'ios')
+        : (abi == 'armeabi-v7a' ? 'android-armv7' : 'android-arm64');
+    final a = assets[key] as Map?;
+    return {
+      'latest': m['version'],
+      'notes': m['notes'] ?? '',
+      'asset': a == null ? null : {...a, 'key': key},
+    };
+  }
+
   Future<void> _check() async {
     setState(() {
       _checking = true;
       _msg = '';
     });
+    final app = widget.app;
     try {
       final abi = await AndroidBridge.abi();
-      final info = await widget.app.api.updateInfo(Platform.isIOS ? 'ios' : 'android', abi);
+      Map<String, dynamic>? info;
+      var direct = false;
+      if (!app.standalone && app.endpoints.all.isNotEmpty) {
+        try {
+          info = await app.api.updateInfo(Platform.isIOS ? 'ios' : 'android', abi);
+          if ('${info['error'] ?? ''}'.isNotEmpty && '${info['latest'] ?? ''}'.isEmpty) info = null; // 电脑自己也没查到
+        } catch (_) {/* 电脑没连上：下面直接查 */}
+      }
+      if (info == null) {
+        info = await _directInfo(abi);
+        direct = true;
+      }
+      if (!mounted) return;
       setState(() {
         _info = info;
-        final err = '${info['error'] ?? ''}';
+        _direct = direct;
+        final err = '${info!['error'] ?? ''}';
         _msg = err.isNotEmpty ? err : (_available ? '' : '已经是最新版本');
       });
+      final latest = '${info['latest'] ?? ''}';
+      app.newVersion = _available ? latest : '';
     } catch (e) {
-      setState(() => _msg = '检查失败：$e（要先连上电脑）');
+      if (mounted) setState(() => _msg = '检查失败：$e');
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -71,10 +112,14 @@ class _UpdateSectionState extends State<UpdateSection> {
     try {
       final dir = Directory('${(await getTemporaryDirectory()).path}/updates');
       if (await dir.exists()) await dir.delete(recursive: true);   // 只留这一个版本
-      final file = await widget.app.api.downloadUpdate('${a['key']}', File('${dir.path}/${a['name']}'), size,
-          '${a['sha256']}', (got) {
+      final dst = File('${dir.path}/${a['name']}');
+      void onProgress(int got) {
         if (mounted) setState(() => _progress = got / size);
-      });
+      }
+
+      final file = _direct
+          ? await MobileUpdater(mirror: widget.app.settings.updateMirror).download(a, dst, onProgress)
+          : await widget.app.api.downloadUpdate('${a['key']}', dst, size, '${a['sha256']}', onProgress);
       final r = await AndroidBridge.installApk(file.path);
       setState(() => _msg = r == 'need_permission'
           ? '请在打开的设置页里允许“安装未知应用”，然后回来再点一次「下载并安装」'
@@ -94,9 +139,9 @@ class _UpdateSectionState extends State<UpdateSection> {
     return Padding(
       padding: const EdgeInsets.only(top: 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('软件更新', style: t.textTheme.titleMedium?.copyWith(color: t.colorScheme.primary)),
+        Text('软件更新', style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('当前版本 $appVersion${_info != null ? ' · 电脑端 ${_info!['desktop_version']}' : ''}',
+        Text('当前版本 $appVersion${_info?['desktop_version'] != null ? ' · 电脑端 ${_info!['desktop_version']}' : ''}',
             style: TextStyle(color: t.colorScheme.outline)),
         const SizedBox(height: 8),
         if (_available) ...[
@@ -108,7 +153,7 @@ class _UpdateSectionState extends State<UpdateSection> {
         if (_progress != null) ...[
           LinearProgressIndicator(value: _progress),
           const SizedBox(height: 4),
-          Text('正在从电脑下载 ${((_progress ?? 0) * 100).round()}%', style: t.textTheme.bodySmall),
+          Text('正在${_direct ? '' : '从电脑'}下载 ${((_progress ?? 0) * 100).round()}%', style: t.textTheme.bodySmall),
         ],
         Wrap(spacing: 8, runSpacing: 8, children: [
           OutlinedButton(onPressed: _checking || _progress != null ? null : _check,

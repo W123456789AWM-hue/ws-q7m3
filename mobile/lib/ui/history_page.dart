@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import 'home_page.dart' show asMaps;
+import 'theme.dart';
 import 'widgets.dart';
 
 /// 加载中 / 出错 / 内容 三种状态的通用外壳
@@ -54,21 +55,38 @@ class HistoryPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('历史记录')),
       body: Loader<List<Map<String, dynamic>>>(
-        load: app.api.sessions,
+        load: app.sessions,
         builder: (context, items) {
-          if (items.isEmpty) return const Center(child: Text('还没有记录'));
+          if (items.isEmpty) return Center(child: Text('还没有记录', style: TextStyle(color: context.c.label2)));
           return ListView.builder(
+            padding: const EdgeInsets.only(top: 4, bottom: 24),
             itemCount: items.length,
             itemBuilder: (context, i) {
               final s = items[i];
               final title = '${s['title'] ?? ''}'.isEmpty ? '（未命名）' : '${s['title']}';
-              return ListTile(
-                title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                    '${'${s['started']}'.replaceFirst('T', ' ').split('.').first} · ${s['count']} 次复盘'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => SessionPage(app: app, id: '${s['id']}', title: title))),
+              return Appear(
+                delay: Duration(milliseconds: (i < 8 ? i : 8) * 35),
+                child: Pressable(
+                  scale: .98,
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => SessionPage(app: app, id: '${s['id']}', title: title))),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 13, 10, 13),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 3),
+                            Text('${'${s['started']}'.replaceFirst('T', ' ').split('.').first} · ${s['count']} 次复盘',
+                                style: TextStyle(color: context.c.label2, fontSize: 13)),
+                          ]),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: context.c.label3),
+                      ]),
+                    ),
+                  ),
+                ),
               );
             },
           );
@@ -95,7 +113,7 @@ class SessionPage extends StatelessWidget {
           bottom: const TabBar(tabs: [Tab(text: 'AI 复盘'), Tab(text: '完整转写')]),
         ),
         body: Loader<Map<String, dynamic>>(
-          load: () => app.api.session(id),
+          load: () => app.session(id),
           builder: (context, session) {
             final reviews = asMaps(session['reviews']).reversed.toList();
             final summary = '${session['summary'] ?? ''}';

@@ -1,0 +1,154 @@
+/// 手机直接调用 AI（OpenAI 兼容的 Chat Completions 接口）：听录音做复盘、文字做总复盘。
+/// 只在「手机独立复盘」模式下使用；连电脑的模式里这些都由电脑做。
+library;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'audio.dart';
+import 'settings.dart';
+
+class AiException implements Exception {
+  AiException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// 一段要发给 AI 听的录音：前面的标注 + 16k 单声道 PCM
+class AudioPart {
+  AudioPart(this.label, this.pcm);
+  final String label;
+  final Uint8List pcm;
+}
+
+/// PCM → WAV 文件内容
+Uint8List wavBytes(Uint8List pcm) {
+  final h = ByteData(44);
+  void tag(int at, String s) {
+    for (var i = 0; i < 4; i++) {
+      h.setUint8(at + i, s.codeUnitAt(i));
+    }
+  }
+
+  tag(0, 'RIFF');
+  h.setUint32(4, 36 + pcm.length, Endian.little);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  h.setUint32(16, 16, Endian.little);
+  h.setUint16(20, 1, Endian.little);
+  h.setUint16(22, 1, Endian.little);
+  h.setUint32(24, kSampleRate, Endian.little);
+  h.setUint32(28, kSampleRate * 2, Endian.little);
+  h.setUint16(32, 2, Endian.little);
+  h.setUint16(34, 16, Endian.little);
+  tag(36, 'data');
+  h.setUint32(40, pcm.length, Endian.little);
+  return (BytesBuilder(copy: false)
+        ..add(h.buffer.asUint8List())
+        ..add(pcm))
+      .takeBytes();
+}
+
+class AiClient {
+  AiClient(this.s);
+  final AppSettings s;
+
+  Future<String> _post(Map<String, dynamic> body, Duration timeout, {bool audio = false}) async {
+    if (s.aiKey.isEmpty) throw AiException('还没填写 AI 的 API Key（设置 → 手机独立复盘）');
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    try {
+      Future<(int, String)> send(Map<String, dynamic> b) async {
+        final req = await client.postUrl(Uri.parse('${s.aiBaseUrl}/chat/completions'));
+        req.headers.set('Authorization', 'Bearer ${s.aiKey}');
+        final bytes = utf8.encode(jsonEncode(b));
+        req.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
+        req.contentLength = bytes.length;
+        req.add(bytes);
+        final resp = await req.close().timeout(timeout);
+        return (resp.statusCode, await resp.transform(utf8.decoder).join().timeout(timeout));
+      }
+
+      var (code, text) = await send(body);
+      if (code == 400 && !(audio && text.toLowerCase().contains('audio'))) {
+        // 有的模型不收 temperature / max_tokens，去掉再试
+        (code, text) = await send(Map.of(body)
+          ..remove('temperature')
+          ..remove('max_tokens'));
+      }
+      if (code == 401) throw AiException('API Key 不对或已失效');
+      if (code == 413) throw AiException('一次发送的录音太大，请把复盘间隔调短一些');
+      if (code == 429) throw AiException('额度不足或请求太频繁（HTTP 429）：${_cut(text)}');
+      if (code >= 300) throw AiException('AI 接口返回 HTTP $code：${_cut(text)}');
+      final j = jsonDecode(text) as Map;
+      final content = ((j['choices'] as List).first as Map)['message']['content'];
+      if (content is List) {
+        return content.map((p) => p is Map ? '${p['text'] ?? ''}' : '').join().trim(); // 少数兼容接口返回分段内容
+      }
+      return '${content ?? ''}'.trim();
+    } on AiException {
+      rethrow;
+    } on TimeoutException {
+      throw AiException('AI 接口超时，稍后会再试');
+    } on SocketException catch (e) {
+      throw AiException('连不上 AI 接口（${e.message}），检查网络或接口地址');
+    } on HandshakeException {
+      throw AiException('连 AI 接口时安全连接失败，检查网络或接口地址');
+    } on FormatException {
+      throw AiException('AI 接口返回的内容看不懂，检查接口地址是否填到了 /v1');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static String _cut(String t) => t.length > 200 ? t.substring(0, 200) : t;
+
+  /// 让 AI 听几段录音
+  Future<String> listen(String system, String header, List<AudioPart> parts) {
+    final content = <Map<String, dynamic>>[
+      {'type': 'text', 'text': header},
+      for (final p in parts) ...[
+        {'type': 'text', 'text': p.label},
+        {
+          'type': 'input_audio',
+          'input_audio': {'data': base64Encode(wavBytes(p.pcm)), 'format': 'wav'}
+        },
+      ],
+    ];
+    return _post({
+      'model': s.aiModel,
+      'modalities': ['text'],
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': content},
+      ],
+      'temperature': 0.8,
+      'max_tokens': 12000,
+    }, const Duration(minutes: 5), audio: true);
+  }
+
+  /// 文字对话（总复盘、日 / 月 / 年复盘）
+  Future<String> chat(String system, String user) => _post({
+        'model': s.aiTextModel.isEmpty ? s.aiModel : s.aiTextModel,
+        'messages': [
+          {'role': 'system', 'content': system},
+          {'role': 'user', 'content': user},
+        ],
+        'temperature': 0.9,
+        'max_tokens': 4000,
+      }, const Duration(minutes: 3));
+
+  /// 设置页的测试按钮：发 1.5 秒提示音，确认 Key、模型都能用
+  Future<String> test() async {
+    final n = (kSampleRate * 1.5).round();
+    final bd = ByteData(n * 2);
+    for (var i = 0; i < n; i++) {
+      // 440Hz 方波（不需要 sin，够 AI 听出“有声音”）
+      bd.setInt16(i * 2, ((i * 440 * 2 ~/ kSampleRate).isEven ? 6000 : -6000), Endian.little);
+    }
+    final out = await listen('', '这是一段测试音频。请用一句中文描述你听到了什么。', [AudioPart('【测试】', bd.buffer.asUint8List())]);
+    return 'AI 能听到录音（${s.aiModel}）：${out.length > 80 ? out.substring(0, 80) : out}';
+  }
+}

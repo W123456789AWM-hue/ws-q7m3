@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app_state.dart';
-import 'ui/home_page.dart';
+import 'ui/shell.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,14 +21,12 @@ class AiMindApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2F5D50);
     return MaterialApp(
       title: 'AI 录音思考',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(
-          colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
-      home: HomePage(app: app),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      home: Shell(app: app),
     );
   }
 }

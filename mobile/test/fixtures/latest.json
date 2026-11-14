@@ -1,0 +1,43 @@
+{
+ "version": "0.9.12",
+ "date": "2026-11-14",
+ "notes": "0.9.12：修复 Windows 安装程序装不上\n\n- 修复：Windows 安装程序提示“安装包不完整（缺少 payload.zip）”，在线更新也因此装不上\n- 以后每次发布前都会自动试装一遍安装程序，装不上就不发布\n\nCo-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>",
+ "assets": {
+  "windows": {
+   "name": "AIMind-Setup-0.9.12.exe",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-Setup-0.9.12.exe",
+   "size": 57638547,
+   "sha256": "02a31dafb55fcd6350b5f17b3d7433f88a8a0abcaeacfca9e1d9a81debc26924"
+  },
+  "mac-arm64": {
+   "name": "AIMind-0.9.12-mac-arm64.dmg",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-0.9.12-mac-arm64.dmg",
+   "size": 35514194,
+   "sha256": "c0854728510f9f2a8b9835a8a0e2649fb8f9e91e3171cefd5a1e60e3eb5003f3"
+  },
+  "mac-intel": {
+   "name": "AIMind-0.9.12-mac-intel.dmg",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-0.9.12-mac-intel.dmg",
+   "size": 37434231,
+   "sha256": "c300bb76355271c10b386d5a35c440d0eeb08bf3810369c1611063c0e3e1b5f3"
+  },
+  "android-arm64": {
+   "name": "AIMind-0.9.12-android-arm64.apk",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-0.9.12-android-arm64.apk",
+   "size": 18308393,
+   "sha256": "ec822c8439e916f675761d97e6c23bffd76883a7d086dc437bb3536648f002c8"
+  },
+  "android-armv7": {
+   "name": "AIMind-0.9.12-android-armv7.apk",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-0.9.12-android-armv7.apk",
+   "size": 16010275,
+   "sha256": "dc8a03198052e131b11c0cf165858116d04cb149b3250271d5486f27ec44d431"
+  },
+  "ios": {
+   "name": "AIMind-0.9.12-ios-unsigned.ipa",
+   "url": "https://github.com/W123456789AWM-hue/aimind-releases/releases/download/v0.9.12/AIMind-0.9.12-ios-unsigned.ipa",
+   "size": 7774253,
+   "sha256": "16b778496de74769e11650aac2228b3e1da033f4bf3b71ec892a3cf7afc577bd"
+  }
+ }
+}

@@ -22,6 +22,22 @@ class AppSettings {
   int chunkSec = 10; // 每多少秒上传一片
   int maxSpoolMb = 3000; // 手机上最多暂存多少 MB 没传完的录音
 
+  // ---- 手机独立复盘（不连电脑，手机直接把录音发给 AI） ----
+  bool standalone = false;
+  String aiBaseUrl = 'https://api.openai.com/v1';
+  String aiKey = '';
+  String aiModel = 'gpt-audio-1.5'; // 能听录音的模型
+  String aiTextModel = ''; // 总复盘、日 / 月 / 年复盘用的文字模型；留空 = 用上面的模型
+  int reviewEveryMin = 10; // 每隔多少分钟复盘一次
+  String aboutMe = '';
+  String glossary = '';
+  String extraInstructions = '';
+
+  // ---- 界面 ----
+  bool splash = true; // 打开 App 时播放启动动画
+  bool autoCheckUpdate = true; // 打开 App 时自动检查新版本（每天最多一次）
+  String updateMirror = ''; // 下载更新用的镜像（一般不用填）
+
   File? file;
 
   Map<String, dynamic> toJson() => {
@@ -39,6 +55,18 @@ class AppSettings {
         'vadMarginDb': vadMarginDb,
         'chunkSec': chunkSec,
         'maxSpoolMb': maxSpoolMb,
+        'standalone': standalone,
+        'aiBaseUrl': aiBaseUrl,
+        'aiKey': aiKey,
+        'aiModel': aiModel,
+        'aiTextModel': aiTextModel,
+        'reviewEveryMin': reviewEveryMin,
+        'aboutMe': aboutMe,
+        'glossary': glossary,
+        'extraInstructions': extraInstructions,
+        'splash': splash,
+        'autoCheckUpdate': autoCheckUpdate,
+        'updateMirror': updateMirror,
       };
 
   void apply(Map<String, dynamic> m) {
@@ -68,6 +96,20 @@ class AppSettings {
     vadMarginDb = f('vadMarginDb', vadMarginDb).clamp(3, 30).toDouble();
     chunkSec = i('chunkSec', chunkSec).clamp(5, 60);
     maxSpoolMb = i('maxSpoolMb', maxSpoolMb).clamp(100, 50000);
+    standalone = b('standalone', standalone);
+    aiBaseUrl = s('aiBaseUrl', aiBaseUrl).trim().replaceAll(RegExp(r'/+$'), '');
+    if (aiBaseUrl.isEmpty) aiBaseUrl = 'https://api.openai.com/v1';
+    aiKey = s('aiKey', aiKey).trim();
+    aiModel = s('aiModel', aiModel).trim();
+    if (aiModel.isEmpty) aiModel = 'gpt-audio-1.5';
+    aiTextModel = s('aiTextModel', aiTextModel).trim();
+    reviewEveryMin = i('reviewEveryMin', reviewEveryMin).clamp(1, 240);
+    aboutMe = s('aboutMe', aboutMe);
+    glossary = s('glossary', glossary);
+    extraInstructions = s('extraInstructions', extraInstructions);
+    splash = b('splash', splash);
+    autoCheckUpdate = b('autoCheckUpdate', autoCheckUpdate);
+    updateMirror = s('updateMirror', updateMirror).trim();
   }
 
   static String newDeviceId() {

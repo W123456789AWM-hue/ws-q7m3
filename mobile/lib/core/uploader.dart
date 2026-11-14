@@ -194,7 +194,7 @@ class Uploader {
 
   /// 有新片或定时器触发时调用；[force] 用于用户手动点“立即重试”
   Future<void> kick({bool force = false}) async {
-    if (_busy) return;
+    if (_busy || settings.standalone) return; // 独立模式：录音片由手机自己交给 AI，不传电脑
     if (force) _retryAt = null;
     _busy = true;
     try {

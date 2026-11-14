@@ -7,11 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'android_bridge.dart';
 import 'core/api.dart';
 import 'core/endpoints.dart';
+import 'core/local_engine.dart';
 import 'core/settings.dart';
+import 'core/updater.dart';
 import 'core/uploader.dart';
 import 'recorder.dart';
+import 'ui/update_section.dart' show appVersion, newer;
 
-/// 手机端：录音 → 切片暂存 → 传给电脑；并从电脑读取转写和复盘来显示
+/// 手机端：录音 → 切片暂存 → 传给电脑（或者「手机独立复盘」：手机自己交给 AI）；界面显示转写和复盘
 class AppState extends ChangeNotifier {
   AppState(this.dataDir)
       : settings = AppSettings.load(File('${dataDir.path}/settings.json')) {
@@ -19,7 +22,9 @@ class AppState extends ChangeNotifier {
     endpoints = Endpoints(settings);
     uploader = Uploader(spoolDir, settings,
         endpoints: endpoints, canUpload: _canUpload, onChanged: notifyListeners);
-    spool = ChunkSpool(spoolDir, settings, onChunk: () => unawaited(uploader.kick()));
+    engine = LocalEngine(Directory('${dataDir.path}/local'), spoolDir, settings, onChanged: _localChanged);
+    spool = ChunkSpool(spoolDir, settings,
+        onChunk: () => unawaited(settings.standalone ? engine.kick() : uploader.kick()));
     api = ServerApi(settings, endpoints);
     mic = MicRecorder(settings: settings, onData: spool.add, onProblem: say);
   }
@@ -29,6 +34,7 @@ class AppState extends ChangeNotifier {
   late final Endpoints endpoints;
   late final Uploader uploader;
   late final ChunkSpool spool;
+  late final LocalEngine engine;
   late final ServerApi api;
   late final MicRecorder mic;
 
@@ -45,7 +51,16 @@ class AppState extends ChangeNotifier {
   bool _refreshing = false;
 
   bool get recording => spool.recording;
-  bool get configured => endpoints.all.isNotEmpty;
+  bool get standalone => settings.standalone;
+  bool get configured => standalone || endpoints.all.isNotEmpty;
+
+  /// 发布仓库里的最新版本号（比当前新才有值）：设置页和底部导航上显示小红点
+  String newVersion = '';
+
+  void _localChanged() {
+    if (standalone) view = engine.view(recording: recording, stream: spool.stream);
+    notifyListeners();
+  }
 
   /// 当前是不是连着 WiFi（每次轮询时更新）
   bool onWifi = true;
@@ -59,7 +74,7 @@ class AppState extends ChangeNotifier {
       onWifi = true;
     }
     // 用移动网络时，新录的片压缩后再传
-    spool.compress = !onWifi && settings.compressOnCellular;
+    spool.compress = !standalone && !onWifi && settings.compressOnCellular;
   }
 
   void say(String m) {
@@ -80,13 +95,24 @@ class AppState extends ChangeNotifier {
       _tick++;
       if (_tick % 4 == 0) unawaited(_checkNetwork());
       // 用移动网络时少刷新一点，省流量
-      if (onWifi || _tick % 4 == 0) refresh();
+      if (standalone) {
+        unawaited(engine.kick()); // 上次没处理完的接着处理
+        _localChanged();
+      } else if (onWifi || _tick % 4 == 0) {
+        refresh();
+      }
     });
     unawaited(refresh());
+    if (settings.autoCheckUpdate) unawaited(checkUpdate());
   }
 
   /// 从电脑拉取最新的转写和复盘（App 在后台时不拉，省电）
   Future<void> refresh({bool force = false}) async {
+    if (standalone) {
+      viewError = '';
+      _localChanged();
+      return;
+    }
     if (_refreshing || !configured || (!foreground && !force)) return;
     _refreshing = true;
     try {
@@ -138,7 +164,39 @@ class AppState extends ChangeNotifier {
     recordStart = null;
     await AndroidBridge.stopForegroundService();
     notifyListeners();
-    unawaited(uploader.kick(force: true));
+    unawaited(standalone ? engine.kick() : uploader.kick(force: true));
+  }
+
+  // ---- 下面这些：连电脑时问电脑，独立模式用手机上的数据 ----
+  Future<List<Map<String, dynamic>>> sessions() async => standalone ? engine.sessions() : api.sessions();
+
+  Future<Map<String, dynamic>> session(String id) async =>
+      standalone ? (engine.session(id) ?? <String, dynamic>{}) : api.session(id);
+
+  Future<String> report(String period, String key, {bool make = false}) async => !standalone
+      ? api.report(period, key, make: make)
+      : (make ? engine.makeReport(period, key) : engine.report(period, key));
+
+  Future<void> reviewNow() async {
+    if (!standalone) return api.reviewNow();
+    final id = (view?['session'] as Map?)?['id'];
+    if (id != null) await engine.reviewNow('$id');
+  }
+
+  Future<void> retryReview(int rid, {String? sessionId}) async {
+    if (!standalone) return api.retryReview(rid);
+    final id = sessionId ?? (view?['session'] as Map?)?['id'];
+    if (id != null) await engine.retry('$id', rid);
+  }
+
+  /// 直接从发布仓库看有没有新版本（不经过电脑）；失败不打扰用户
+  Future<void> checkUpdate() async {
+    try {
+      final m = await MobileUpdater(mirror: settings.updateMirror).fetchManifest();
+      final v = '${m['version']}';
+      newVersion = newer(v, appVersion) ? v : '';
+      notifyListeners();
+    } catch (_) {}
   }
 
   @override
@@ -152,7 +210,7 @@ class AppState extends ChangeNotifier {
   void saveSettings() {
     settings.save();
     notifyListeners();
-    unawaited(uploader.kick(force: true));
+    unawaited(standalone ? engine.kick() : uploader.kick(force: true));
     unawaited(refresh(force: true));
   }
 }

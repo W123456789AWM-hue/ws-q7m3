@@ -57,6 +57,19 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
   上传拿 image_key 放进卡片；密钥 `FEEDBACK_APP_ID` / `FEEDBACK_APP_SECRET`（测试用 `AIMIND_FEEDBACK_APP_ID` / `_SECRET`）。
   没配或卡片不收图时文字照发，卡片里注明，图片留在 `data/feedback/<编号>/`。
 
+## 手机端（mobile/）
+
+- 两种用法（设置里切换，`settings.standalone`）：**连接电脑**（手机只录音上传，`core/uploader.dart`）和
+  **手机独立复盘**（`core/local_engine.dart`：手机自己把录音发给 OpenAI 兼容接口，结果存手机 `local/sessions/*.json`，
+  格式和电脑端 session.json 对齐，界面两种模式共用）。两种模式吃的是同一批暂存录音片（spool）。
+  提示词在 `core/prompts.dart`，和电脑端 `review/prompts.py` 保持一致，改的时候两边一起改。
+- 界面：`ui/theme.dart` 是设计变量（和电脑端 tokens.css 同一套颜色 / 圆角 / 动画曲线，改主题只改这里），
+  `ui/shell.dart` 底部四个标签 + 启动动画（`ui/splash.dart`，播 `assets/splash.webp`，和电脑端同一个文件），
+  出现动画用 `Appear`、按压反馈用 `Pressable`，页面切换统一 iOS 横向推入。
+- 在线更新：连着电脑就走电脑（`/api/update/mobile`），否则 `core/updater.dart` 直接连发布仓库（同一把公钥验签 + sha256）。
+- 测试（`flutter test`）：`standalone_test.dart` 用假 AI 接口跑完整的独立复盘流程；`ui_smoke_test.dart` 把四个页面都画一遍，
+  设环境变量 `UI_SHOTS=<文件夹>` 会存成 PNG（本机没有安卓环境时靠它看界面）。
+
 ## 复盘层级
 
 - 小复盘（阶段复盘）：录音中按 `review_mode`（realtime / interval）触发，engine.py。

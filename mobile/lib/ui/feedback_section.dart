@@ -110,7 +110,7 @@ class _FeedbackSectionState extends State<FeedbackSection> {
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('反馈', style: t.textTheme.titleMedium?.copyWith(color: t.colorScheme.primary)),
+        Text('反馈', style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         Text('遇到问题或想要新功能，直接告诉开发者（经电脑转发）', style: TextStyle(color: t.colorScheme.outline)),
         const SizedBox(height: 8),

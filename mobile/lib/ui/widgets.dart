@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 /// 极简 Markdown 显示（标题、列表、加粗），用于总复盘和日复盘
 class MarkdownLite extends StatelessWidget {
   const MarkdownLite(this.text, {super.key});
@@ -64,20 +66,19 @@ const _kindNames = {
   'final_part': '收尾复盘',
 };
 
-class _Tone {
-  const _Tone(this.fg, this.bgLight, this.bgDark);
-  final Color fg;
-  final Color bgLight;
-  final Color bgDark;
+/// 复盘卡片里每个小节的颜色（和电脑端一样用系统色）
+Color _tone(BuildContext context, String k) {
+  final c = context.c;
+  return switch (k) {
+    'amber' => c.orange,
+    'violet' => c.purple,
+    'blue' => c.accent,
+    'green' => c.green,
+    'teal' => c.teal,
+    'orange' => c.red,
+    _ => c.label2,
+  };
 }
-
-const _amber = _Tone(Color(0xFFB7791F), Color(0xFFFDF6E7), Color(0xFF3A2F17));
-const _violet = _Tone(Color(0xFF7C5BD1), Color(0xFFF4F0FC), Color(0xFF2C2540));
-const _blue = _Tone(Color(0xFF3B82C4), Color(0xFFEEF5FC), Color(0xFF1C2B3A));
-const _green = _Tone(Color(0xFF2F855A), Color(0xFFEDF7F1), Color(0xFF1B3327));
-const _gray = _Tone(Color(0xFF7A7A80), Color(0xFFF3F3F1), Color(0xFF2A2A2C));
-const _teal = _Tone(Color(0xFF2C7A7B), Color(0xFFEEF7F7), Color(0xFF1A3333));
-const _orange = _Tone(Color(0xFFC05621), Color(0xFFFFF4F2), Color(0xFF3A2219));
 
 String _fmtSec(Object? v) {
   final s = (v is num ? v : num.tryParse('$v') ?? 0).round();
@@ -90,21 +91,20 @@ class ReviewCard extends StatelessWidget {
   final Map<String, dynamic> r;
   final VoidCallback? onRetry;
 
-  Widget _section(BuildContext context, _Tone tone, String title, Object? items,
+  Widget _section(BuildContext context, String tone, String title, Object? items,
       Widget Function(Object? item) build) {
     if (items is! List || items.isEmpty) return const SizedBox.shrink();
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final col = _tone(context, tone);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-          color: dark ? tone.bgDark : tone.bgLight,
-          borderRadius: BorderRadius.circular(8)),
+          color: col.withValues(alpha: .1), borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
             style: TextStyle(
-                color: tone.fg, fontWeight: FontWeight.w700, fontSize: 13)),
+                color: col, fontWeight: FontWeight.w700, fontSize: 13)),
         const SizedBox(height: 4),
         for (final x in items)
           Padding(
@@ -175,8 +175,8 @@ class ReviewCard extends StatelessWidget {
       body.add(Text('这段时间以闲聊或噪音为主。${a['summary'] ?? ''}', style: muted));
     } else {
       body.add(Text('${a['summary'] ?? ''}', style: const TextStyle(height: 1.55)));
-      body.add(_section(context, _amber, '🔍 你可能没注意到', a['blind_spots'], _plain));
-      body.add(_section(context, _violet, '💡 潜在需求', a['latent_needs'], (x) {
+      body.add(_section(context, 'amber', '🔍 你可能没注意到', a['blind_spots'], _plain));
+      body.add(_section(context, 'violet', '💡 潜在需求', a['latent_needs'], (x) {
         if (x is! Map) return _plain(x);
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${x['need']}', style: const TextStyle(height: 1.5)),
@@ -185,7 +185,7 @@ class ReviewCard extends StatelessWidget {
       }));
       body.add(_section(
           context,
-          _blue,
+          'blue',
           '🌀 发散联想',
           a['divergent'],
           (x) => x is Map
@@ -193,22 +193,21 @@ class ReviewCard extends StatelessWidget {
               : _plain(x)));
       body.add(_section(
           context,
-          _green,
+          'green',
           '✅ 建议',
           a['suggestions'],
           (x) => x is Map
               ? _tagged(context, '${x['priority'] ?? ''}', '${x['text']}',
                   hot: x['priority'] == '高')
               : _plain(x)));
-      body.add(_section(context, _gray, '❓ 值得追问自己', a['questions'], _plain));
-      body.add(_section(context, _orange, '🔁 和上次复盘相比', a['changes'], _plain));
-      body.add(_section(context, _teal, '🎧 从语气里听出来的', a['voice_cues'], _plain));
+      body.add(_section(context, 'gray', '❓ 值得追问自己', a['questions'], _plain));
+      body.add(_section(context, 'orange', '🔁 和上次复盘相比', a['changes'], _plain));
+      body.add(_section(context, 'teal', '🎧 从语气里听出来的', a['voice_cues'], _plain));
     }
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: theme.textTheme.titleMedium),
           Text('${r['from_clock']}–${r['to_clock']} · $kind', style: muted),
@@ -244,12 +243,11 @@ class SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: theme.colorScheme.primary)),
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: .55))),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: theme.textTheme.titleMedium),
           MarkdownLite(markdown),
@@ -261,22 +259,28 @@ class SummaryCard extends StatelessWidget {
 
 /// 转写列表（按段落）
 class TranscriptList extends StatelessWidget {
-  const TranscriptList(this.paragraphs, {super.key, this.controller});
+  const TranscriptList(this.paragraphs, {super.key, this.controller, this.shrinkWrap = false});
+
+  /// true：放在别的滚动列表里面，自己不滚动
   final List<Map<String, dynamic>> paragraphs;
   final ScrollController? controller;
+  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (paragraphs.isEmpty) {
-      return Center(
-          child: Text('还没有转写内容', style: TextStyle(color: theme.colorScheme.outline)));
+      return Padding(
+          padding: const EdgeInsets.all(36),
+          child: Center(child: Text('还没有听写内容', style: TextStyle(color: theme.colorScheme.outline))));
     }
     // 几台设备同时录音时，每段前面标上是哪台设备录的
     final multi = paragraphs.map((p) => p['device_name'] ?? '').toSet().length > 1;
     return ListView.separated(
       controller: controller,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       itemCount: paragraphs.length,
       separatorBuilder: (_, __) => const Divider(height: 24),
       itemBuilder: (context, i) {

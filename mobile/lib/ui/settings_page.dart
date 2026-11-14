@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../core/ai.dart';
 import '../core/settings.dart';
 import 'feedback_section.dart';
+import 'home_page.dart' show Segmented;
+import 'theme.dart';
 import 'update_section.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -99,6 +102,15 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _token = TextEditingController(text: s.token);
   late final _name = TextEditingController(text: s.deviceName);
   late final _margin = TextEditingController(text: '${s.vadMarginDb}');
+  // 手机独立复盘
+  late final _aiUrl = TextEditingController(text: s.aiBaseUrl);
+  late final _aiKey = TextEditingController(text: s.aiKey);
+  late final _aiModel = TextEditingController(text: s.aiModel);
+  late final _aiText = TextEditingController(text: s.aiTextModel);
+  late final _every = TextEditingController(text: '${s.reviewEveryMin}');
+  late final _about = TextEditingController(text: s.aboutMe);
+  late final _glossary = TextEditingController(text: s.glossary);
+  late final _extra = TextEditingController(text: s.extraInstructions);
 
   Map<String, dynamic>? _remote; // 电脑上的设置（加载成功后才有）
   final Map<String, TextEditingController> _rc = {};
@@ -109,7 +121,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    if (app.configured) _loadRemote();
+    if (app.configured && !app.standalone) _loadRemote();
   }
 
   @override
@@ -119,6 +131,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _token.dispose();
     _name.dispose();
     _margin.dispose();
+    for (final c in [_aiUrl, _aiKey, _aiModel, _aiText, _every, _about, _glossary, _extra]) {
+      c.dispose();
+    }
     for (final c in _rc.values) {
       c.dispose();
     }
@@ -131,10 +146,21 @@ class _SettingsPageState extends State<SettingsPage> {
     s.token = _token.text;
     s.deviceName = _name.text;
     s.vadMarginDb = double.tryParse(_margin.text.trim()) ?? s.vadMarginDb;
+    s.aiBaseUrl = _aiUrl.text;
+    s.aiKey = _aiKey.text;
+    s.aiModel = _aiModel.text;
+    s.aiTextModel = _aiText.text;
+    s.reviewEveryMin = int.tryParse(_every.text.trim()) ?? s.reviewEveryMin;
+    s.aboutMe = _about.text;
+    s.glossary = _glossary.text;
+    s.extraInstructions = _extra.text;
     app.saveSettings();
     _url.text = s.serverUrl; // 显示规范化后的地址
     _url2.text = s.serverUrl2;
     _name.text = s.deviceName;
+    _aiUrl.text = s.aiBaseUrl;
+    _aiModel.text = s.aiModel;
+    _every.text = '${s.reviewEveryMin}';
   }
 
   Future<void> _loadRemote() async {
@@ -192,7 +218,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<bool> _saveAll({bool quiet = false}) async {
     _applyLocal();
-    final patch = _remotePatch();
+    final patch = s.standalone ? <String, dynamic>{} : _remotePatch();
     try {
       if (patch.isNotEmpty) {
         await app.api.setConfig(patch);
@@ -200,7 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       if (!quiet && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_remote == null ? '已保存手机上的设置' : '已保存（电脑上的设置已同步）')));
+            content: Text(_remote == null || s.standalone ? '已保存' : '已保存（电脑上的设置已同步）')));
       }
       return true;
     } catch (e) {
@@ -237,6 +263,20 @@ class _SettingsPageState extends State<SettingsPage> {
     if (msg.startsWith('✅')) await _loadRemote();
   }
 
+  Future<void> _aiTest() async {
+    _applyLocal();
+    setState(() => _busy = true);
+    String msg;
+    try {
+      msg = '✅ ${await AiClient(s).test()}';
+    } catch (e) {
+      msg = '❌ $e';
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await _dialog(msg);
+  }
+
   Future<void> _remoteTest(String kind) async {
     if (!await _saveAll(quiet: true)) return;
     setState(() => _busy = true);
@@ -252,13 +292,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _title(String t, [String? sub]) => Padding(
-        padding: const EdgeInsets.only(top: 22, bottom: 6),
+        padding: const EdgeInsets.only(top: 26, bottom: 6),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(t,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                  ?.copyWith(fontWeight: FontWeight.w700)),
           if (sub != null) Text(sub, style: Theme.of(context).textTheme.bodySmall),
         ]),
       );
@@ -366,9 +406,39 @@ class _SettingsPageState extends State<SettingsPage> {
       body: AbsorbPointer(
         absorbing: _busy,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 48),
           children: [
             if (_busy) const LinearProgressIndicator(),
+            _title('用哪种方式', '随时可以切换；两种方式的记录分开保存'),
+            Segmented(
+              labels: const ['连接电脑', '手机独立复盘'],
+              index: s.standalone ? 1 : 0,
+              onChanged: (i) {
+                setState(() => s.standalone = i == 1);
+                _applyLocal();
+                if (i == 0 && app.configured && _remote == null) _loadRemote();
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  s.standalone
+                      ? '不用电脑：手机直接把录音交给 AI 听并复盘，结果存在这台手机上。需要你自己的 AI 接口 Key，费用由接口方向你收取。'
+                      : '手机只负责录音，AI 复盘在电脑上做，结果存电脑并同步 NAS。不在同一个网络时录音先存手机，连上后自动补传。',
+                  style: TextStyle(color: context.c.label2, fontSize: 13, height: 1.45)),
+            ),
+            if (s.standalone) ...[
+              _title('手机独立复盘', 'Key 只保存在这台手机上，只发给你填的接口地址'),
+              _text(_aiUrl, '接口地址（OpenAI 兼容）', hint: '填到 /v1，默认 https://api.openai.com/v1'),
+              _text(_aiKey, 'API Key', secret: true, hint: '在接口提供方的网站上生成，自己粘贴到这里'),
+              _text(_aiModel, '听录音的模型', hint: '要能直接听音频，默认 gpt-audio-1.5'),
+              _text(_aiText, '文字模型（可不填）', hint: '总复盘、日 / 月 / 年复盘用；不填就用上面的模型'),
+              _btn('测试 AI 能不能听到录音', _aiTest),
+              _text(_every, '每隔多少分钟复盘一次', number: true, hint: '1–240。停止录音时会把剩下的复盘完，再做整场总复盘'),
+              _text(_about, '关于我（强烈建议填写）', hint: '你的身份、正在做的事、长期目标。AI 据此推断你的潜在需求', lines: 4),
+              _text(_extra, '额外要求', hint: '例如：多从商业角度想', lines: 3),
+              _text(_glossary, '我常说的词 / 专有名词 / 英文术语', hint: '人名、公司名、术语，用逗号隔开', lines: 3),
+            ] else ...[
             _title('连接电脑', '在电脑上打开「AI 录音思考助手」→「设备连接」，照着填'),
             _text(_url, '电脑地址（在家 / 同一个 WiFi 时用）', hint: '例如 http://192.168.1.20:8765'),
             _text(_url2, '备用地址（外出时用，可不填）',
@@ -377,12 +447,13 @@ class _SettingsPageState extends State<SettingsPage> {
             _text(_name, '这台设备的名字',
                 hint: '几台手机/平板同时录音时，电脑上用它区分，例如“客厅手机”“办公室 iPad”'),
             _btn('测试连接', _connect),
-            _title('录音与上传（手机上）'),
-            _switch('仅 WiFi 下上传', '打开：用移动网络时不传，录音先存手机，连上 WiFi 再补传。\n关闭：在外面用移动网络也实时传（需要填备用地址）', s.wifiOnly,
+            ],
+            _title(s.standalone ? '录音' : '录音与上传（手机上）'),
+            if (!s.standalone) _switch('仅 WiFi 下上传', '打开：用移动网络时不传，录音先存手机，连上 WiFi 再补传。\n关闭：在外面用移动网络也实时传（需要填备用地址）', s.wifiOnly,
                 (v) => s.wifiOnly = v),
-            _switch('用移动网络时压缩后再传', '流量约为原来的 1/4，对识别准确度影响很小', s.compressOnCellular,
+            if (!s.standalone) _switch('用移动网络时压缩后再传', '流量约为原来的 1/4，对识别准确度影响很小', s.compressOnCellular,
                 (v) => s.compressOnCellular = v),
-            _switch('没人说话的片段不上传', '省流量、省电，也省 NAS 空间', s.skipSilence,
+            _switch(s.standalone ? '没人说话的片段不发给 AI' : '没人说话的片段不上传', s.standalone ? '省钱：AI 听录音按时长计费' : '省流量、省电，也省 NAS 空间', s.skipSilence,
                 (v) => s.skipSilence = v),
             _switch('打开 App 就自动开始录音', '适合全天候使用', s.autoStart, (v) => s.autoStart = v),
             _switch('麦克风自动增益', '手机离得远、声音小时有帮助（下次开始录音生效）', s.micAutoGain,
@@ -391,7 +462,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 (v) => s.micNoiseSuppress = v),
             _text(_margin, '声音检测灵敏度（dB）',
                 number: true, hint: '比环境噪音高多少算“有人说话”。漏掉小声说话就调小（5–6），环境吵就调大（10–15）'),
-            ..._remoteWidgets(),
+            if (!s.standalone) ..._remoteWidgets(),
+            _title('界面'),
+            _switch('启动动画', '打开 App 时播放，点一下可以跳过', s.splash, (v) => s.splash = v),
+            _switch('自动检查新版本', '打开 App 时看一眼有没有新版本，有的话在「设置」上显示小蓝点', s.autoCheckUpdate,
+                (v) => s.autoCheckUpdate = v),
             UpdateSection(app: app),
             FeedbackSection(app: app),
           ],
