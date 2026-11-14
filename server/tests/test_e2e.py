@@ -214,3 +214,26 @@ def test_online_update_via_local_release_server(client, monkeypatch, tmp_path):
     finally:
         srv.shutdown()
         client.post("/api/config", json={"update_manifest_url": ""})
+
+
+def test_feedback_from_phone_goes_through_desktop(client, monkeypatch, tmp_path):
+    """手机 App 发反馈：带口令发给电脑，电脑转发；没配置机器人时先存着，界面能看到“等待发送”"""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from aimind import feedback
+    from aimind.web.app import app
+    monkeypatch.setattr(feedback, "FEEDBACK_DIR", tmp_path)
+    monkeypatch.setattr(feedback, "target", lambda: ("", ""))
+    phone = TestClient(app, client=("192.168.1.50", 5000))
+    assert phone.post("/api/feedback", json={"text": "hi"}).status_code == 401      # 没口令不行
+    token = client.get("/api/config").json()["server_token"]
+    r = phone.post("/api/feedback", headers={"X-Token": token}, json={
+        "kind": "bug", "text": "上传卡住了", "source": "客厅手机", "client": "App 0.9.6 · android 14"}).json()
+    assert r["status"] == "pending" and r["source"] == "客厅手机" and "diag" not in r
+    saved = json.loads((tmp_path / f"{r['id']}.json").read_text(encoding="utf-8"))
+    assert saved["diag"].startswith("发送设备：App 0.9.6 · android 14")
+    j = client.get("/api/feedback").json()
+    assert j["configured"] is False and j["items"][0]["id"] == r["id"]
+    assert client.post("/api/feedback", json={"text": "  "}).status_code == 400

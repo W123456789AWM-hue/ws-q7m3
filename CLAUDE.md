@@ -45,6 +45,14 @@ scripts/package.sh      打包给用户的 zip
   Mac 用脚本替换 .app。录音中不更新。手机 App 通过电脑的 `/api/update/mobile`、`/api/update/file/…` 更新。
 - 本机测试更新：设置项 `update_manifest_url` 指向自己搭的发布目录（见 tests/test_e2e.py 的 test_online_update_*）。
 
+## 用户反馈
+
+- 设置「反馈」（`js/feedback.js`）和手机 App 设置页（`feedback_section.dart`）→ `POST /api/feedback` → `aimind/feedback.py` 发到开发者的飞书群（自定义机器人，带签名）。
+  手机不直接连飞书，由电脑转发（机器人地址只在电脑端程序里）。
+- 机器人地址 / 签名密钥：GitHub 仓库密钥 `FEEDBACK_WEBHOOK` / `FEEDBACK_SECRET`，打包时 `aimind.spec` 写进程序；
+  本机打包用 `%LOCALAPPDATA%\ai_mind_build\feedback_target.json`；测试用环境变量 `AIMIND_FEEDBACK_WEBHOOK` / `AIMIND_FEEDBACK_SECRET`。**不要提交进仓库。**
+- 发不出去存 `data/feedback/`，每 5 分钟重发。诊断信息经 `redact()` 抹掉密钥，不带录音和复盘内容。
+
 ## 复盘层级
 
 - 小复盘（阶段复盘）：录音中按 `review_mode`（realtime / interval）触发，engine.py。

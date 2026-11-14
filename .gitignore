@@ -11,3 +11,6 @@ dist/
 server/dist/
 server/build/
 安装包/
+
+# 用户反馈的机器人地址（打包时注入，不提交）
+feedback_target.json

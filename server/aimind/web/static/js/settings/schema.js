@@ -2,7 +2,7 @@
 //
 // 每一项：{k: 键, label: 名字, desc: 一句说明, type, options, when(cfg): 什么时候显示, adv: 收在「高级」里, kw: 额外的搜索词}
 // type：select / seg（分段按钮）/ bool（开关）/ text / password / number / time / textarea / mic（麦克风列表）
-//       test（测试按钮）/ preview（预览启动动画）/ usage（用量面板）/ update（软件更新）/ theme（外观，只存在本机浏览器里）
+//       test（测试按钮）/ preview（预览启动动画）/ usage（用量面板）/ update（软件更新）/ feedback（用户反馈）/ theme（外观，只存在本机浏览器里）
 
 const audioMode = c => (c.review_input || 'audio') === 'audio';
 const textMode = c => c.review_input === 'text';
@@ -106,6 +106,10 @@ export const CATEGORIES = [
 
   {id: 'usage', name: '用量', icon: 'chart', color: '#30d158', groups: [
     {title: '今天的 AI 用量', items: [{k: 'usage', label: 'AI 用量', type: 'usage', kw: 'token 费用 花费 钱 统计'}]},
+  ]},
+
+  {id: 'feedback', name: '反馈', icon: 'chat', color: '#64d2ff', groups: [
+    {title: '告诉开发者', items: [{k: 'feedback', label: '用户反馈', type: 'feedback', kw: '问题 建议 bug 报错 意见 联系 开发者 吐槽'}]},
   ]},
 ];
 

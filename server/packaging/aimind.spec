@@ -18,6 +18,25 @@ hidden = (collect_submodules("aimind") + collect_submodules("uvicorn") + collect
 datas = [(str(SERVER / "aimind/web/static"), "aimind/web/static")]
 datas += collect_data_files("webview")
 
+# 用户反馈的飞书机器人地址：云端打包时来自 GitHub 密钥（环境变量 FEEDBACK_WEBHOOK / FEEDBACK_SECRET），
+# 本机打包时用 %LOCALAPPDATA%\ai_mind_build\feedback_target.json（如果有）。不写进源码目录，也不提交
+import json as _json  # noqa: E402
+import os as _os  # noqa: E402
+
+_fb = SERVER / "build" / "feedback_target.json"
+if _os.environ.get("FEEDBACK_WEBHOOK"):
+    _fb.parent.mkdir(parents=True, exist_ok=True)
+    _fb.write_text(_json.dumps({"webhook": _os.environ["FEEDBACK_WEBHOOK"].strip(),
+                                "secret": _os.environ.get("FEEDBACK_SECRET", "").strip()}), encoding="utf-8")
+else:
+    _local = Path(_os.environ.get("LOCALAPPDATA", "~")).expanduser() / "ai_mind_build" / "feedback_target.json"
+    _fb = _local if _local.exists() else None
+if _fb:
+    datas.append((str(_fb), "aimind"))
+    print("用户反馈：已接通飞书机器人")
+else:
+    print("用户反馈：没有配置机器人地址，打出来的程序只能先把反馈存在本机")
+
 a = Analysis(
     [str(SERVER / "desktop_app.py")],
     pathex=[str(SERVER)],

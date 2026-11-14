@@ -12,8 +12,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import config as config_mod
-from .. import updater
-from . import hub, routes_core, routes_devices, routes_eval, routes_update
+from .. import feedback, updater
+from . import hub, routes_core, routes_devices, routes_eval, routes_feedback, routes_update
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOCAL = ("127.0.0.1", "::1", "localhost", "testclient")
@@ -23,11 +23,12 @@ LOCAL = ("127.0.0.1", "::1", "localhost", "testclient")
 async def lifespan(_app):
     hub.loop = asyncio.get_running_loop()
     updater.start_auto_check(hub.emit)     # 打包好的程序：后台检查新版本
+    feedback.start_retry_loop()            # 没发出去的反馈定时重发
     yield
 
 
 app = FastAPI(title="AI 录音思考助手", lifespan=lifespan)
-for r in (routes_core, routes_devices, routes_eval, routes_update):
+for r in (routes_core, routes_devices, routes_eval, routes_feedback, routes_update):
     app.include_router(r.router)
 
 

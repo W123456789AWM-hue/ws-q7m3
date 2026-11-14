@@ -89,6 +89,16 @@ class ServerApi {
   }
 
   /// 在线更新：问电脑有没有新版本（电脑替手机去发布服务器查、并验证签名）
+  /// 发反馈：电脑转发到开发者的飞书群（发不出去电脑会先存着，之后自动重发）
+  Future<Map<String, dynamic>> sendFeedback(Map<String, Object> body) async =>
+      Map<String, dynamic>.from(await call('/api/feedback', body: body) as Map);
+
+  /// 发过的反馈（存在电脑上，几台设备发的都在）
+  Future<List<Map<String, dynamic>>> feedbackHistory() async {
+    final j = await call('/api/feedback') as Map;
+    return [for (final x in j['items'] as List) Map<String, dynamic>.from(x as Map)];
+  }
+
   Future<Map<String, dynamic>> updateInfo(String platform, String abi) async => Map<String, dynamic>.from(
       await call('/api/update/mobile', query: {'platform': platform, 'abi': abi},
           timeout: const Duration(seconds: 45)) as Map);

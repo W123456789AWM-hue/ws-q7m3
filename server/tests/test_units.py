@@ -2,6 +2,7 @@
 from datetime import datetime
 
 import numpy as np
+import pytest
 
 from aimind.audio import SR, Segmenter
 from aimind.audio.adpcm import decode
@@ -185,3 +186,56 @@ def test_update_download_falls_back_to_other_routes(monkeypatch):
     monkeypatch.setattr(updater, "_open", lambda *a, **k: (_ for _ in ()).throw(OSError("断了")))
     with pytest.raises(RuntimeError, match="线路"):
         updater._get(url, {})
+
+
+def test_feedback_sends_signed_card_and_queues_when_offline(monkeypatch, tmp_path):
+    """反馈发到（模拟的）飞书机器人：签名对得上；发不出去先存着，恢复后重发"""
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from aimind import feedback
+    got, mode = [], {"down": True}
+
+    class Lark(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if mode["down"]:
+                self.send_response(503)
+                self.end_headers()
+                return
+            ok = body.get("sign") == feedback._sign("s3cret", int(body["timestamp"]))
+            got.append(body)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps({"code": 0 if ok else 19021, "msg": "sign match fail"}).encode())
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Lark)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(feedback, "FEEDBACK_DIR", tmp_path)
+    monkeypatch.setenv("AIMIND_FEEDBACK_WEBHOOK", f"http://127.0.0.1:{srv.server_address[1]}/hook")
+    monkeypatch.setenv("AIMIND_FEEDBACK_SECRET", "s3cret")
+    try:
+        r = feedback.submit("bug", "点结束本场没反应", "微信 abc", include_diag=True, source="客厅手机")
+        assert r["status"] == "pending" and "diag" not in r and feedback.history()[0]["id"] == r["id"]
+        mode["down"] = False
+        assert feedback.retry_pending() == 1 and feedback.history()[0]["status"] == "sent"
+        card = got[0]["card"]
+        assert "【问题】" in card["header"]["title"]["content"] and "客厅手机" in card["header"]["title"]["content"]
+        assert "点结束本场没反应" in card["elements"][0]["text"]["content"]
+        assert feedback.retry_pending() == 0                       # 已送达的不会重复发
+        monkeypatch.setenv("AIMIND_FEEDBACK_SECRET", "wrong")      # 签名不对：飞书拒收 → 留着重发
+        assert feedback.submit("idea", "加个导出")["status"] == "pending"
+    finally:
+        srv.shutdown()
+    with pytest.raises(RuntimeError):
+        feedback.submit("bug", "   ")
+
+
+def test_feedback_redacts_secrets():
+    from aimind.feedback import redact
+    s = redact('api_key: "sk-abcDEF1234567890xyz" token=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 正常的话 v0.9.5')
+    assert "sk-abc" not in s and "ghp_aaaa" not in s and "正常的话 v0.9.5" in s

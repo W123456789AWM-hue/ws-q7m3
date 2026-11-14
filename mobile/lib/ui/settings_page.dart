@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../core/settings.dart';
+import 'feedback_section.dart';
 import 'update_section.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -392,6 +393,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 number: true, hint: '比环境噪音高多少算“有人说话”。漏掉小声说话就调小（5–6），环境吵就调大（10–15）'),
             ..._remoteWidgets(),
             UpdateSection(app: app),
+            FeedbackSection(app: app),
           ],
         ),
       ),

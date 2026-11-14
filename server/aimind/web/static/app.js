@@ -22,6 +22,7 @@ import {initPanels} from './js/panels.js';
 import {initEval} from './js/evalset.js';
 import {initUsage} from './js/usage.js';
 import {initUpdate} from './js/update.js';
+import {initFeedback} from './js/feedback.js';
 import {initSettings} from './js/settings/view.js';
 import {connect} from './js/ws.js';
 
@@ -34,6 +35,7 @@ initEval();
 initSettings();
 initUsage();
 initUpdate();
+initFeedback();
 renderAll();
 renderHeader();
 connect();

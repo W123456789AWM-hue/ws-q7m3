@@ -42,6 +42,9 @@ jobs:
       - run: pip install -r requirements.txt -r requirements-dev.txt pyinstaller pywebview pillow
       - run: python -m pytest -q
       - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/aimind.spec
+        env:   # 用户反馈发到哪个飞书群（仓库密钥，没设置也能打包）
+          FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
+          FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
       - name: 绿色版 zip
         shell: pwsh
         run: |
@@ -74,6 +77,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: bash packaging/build_mac.sh
+        env:
+          FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
+          FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
       - run: mv dist/AIMind-Mac.dmg "dist/AIMind-${{ needs.version.outputs.v }}-mac-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4
         with:

@@ -7,6 +7,7 @@ import {layerOpen, openLayer, toast} from '../layers.js';
 import {on, state} from '../state.js';
 import {loadUsage, usageHtml} from '../usage.js';
 import {updateHtml} from '../update.js';
+import {feedbackHtml, loadFeedback} from '../feedback.js';
 import {ALL, CATEGORIES} from './schema.js';
 
 let cfg = {}, mics = [], model = {}, current = 'general';
@@ -45,6 +46,7 @@ function control(f) {
 
 function rowHtml(f) {
   if (f.type === 'update') return `<div class="group" id="row_update" data-row="update">${updateHtml()}</div>`;
+  if (f.type === 'feedback') return `<div id="row_feedback" data-row="feedback">${feedbackHtml()}</div>`;
   if (f.type === 'usage') return `<div class="row stack" id="row_usage" data-row="usage" style="padding:0">${usageHtml()}</div>`;
   if (f.type === 'preview' && !state.app?.desktop) return '';
   let desc = f.desc || '';
@@ -60,7 +62,7 @@ function groupHtml(g) {
   const main = g.items.filter(f => !f.adv), adv = g.items.filter(f => f.adv);
   const gone = g.when && !g.when(cfg) ? ' style="display:none"' : '';
   // 用量、软件更新这种整块内容自己成块；普通设置项放在分组列表里
-  const special = main.filter(f => f.type === 'usage' || f.type === 'update');
+  const special = main.filter(f => ['usage', 'update', 'feedback'].includes(f.type));
   const normal = main.filter(f => !special.includes(f));
   const rows = special.map(rowHtml).join('')
     + (normal.length ? `<div class="group"${special.length ? ' style="margin-top:8px"' : ''}>${normal.map(rowHtml).join('')}</div>` : '');
@@ -198,9 +200,10 @@ export async function openSettings(focus) {
   getJSON('/api/devices').then(m => { mics = m; refresh(['record']); }).catch(() => {});
   getJSON('/api/model').then(mo => { model = mo; refresh(['ai']); }).catch(() => {});
   loadUsage().then(() => refresh(['usage']));
+  loadFeedback();                     // 只刷新「我发过的反馈」，不动正在写的内容
   await openLayer('settingsSheet');
   $$('#setBody .segmented').forEach(segmented);   // 弹窗出现后再算滑块位置
-  if (target && target.k !== 'usage') gotoField(target.k);
+  if (target && !['usage', 'feedback'].includes(target.k)) gotoField(target.k);
 }
 
 export function initSettings() {
