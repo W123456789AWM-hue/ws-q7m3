@@ -1,6 +1,9 @@
 /* 过渡动画：所有浮层的开 / 关、内容切换、列表新增。
    浮层机制（js/anim.js）：打开 = 去掉 hidden → 下一帧加 [data-open]；关闭 = 去掉 [data-open] → 动画结束后加 hidden。 */
 
+/* 没打开（包括正在关闭的动画中）的浮层不接收鼠标：双保险，绝不挡住下面的按钮 */
+.mask:not([data-open]),.drawer:not([data-open]),.sheet:not([data-open]),.menu:not([data-open]),#toast{pointer-events:none}
+
 .mask{opacity:0;transition:opacity var(--t) var(--ease)}
 .mask[data-open]{opacity:1}
 

@@ -30,6 +30,10 @@ def test_pages_and_settings(client):
     for css in re.findall(r'href="(/static/css/[^"]+)"', client.get("/").text):
         assert client.get(css).status_code == 200, css
     assert client.get("/static/js/dom.js").headers.get("cache-control") == "no-cache"
+    # 关着的浮层不能挡住鼠标（曾经出过：display:flex 盖掉了 hidden，透明的抽屉 / 设置弹窗挡住了按钮）
+    css = client.get("/static/css/base.css").text + client.get("/static/css/motion.css").text
+    assert "[hidden]{display:none !important}" in css
+    assert ".drawer:not([data-open])" in css and ".sheet:not([data-open])" in css and "pointer-events:none" in css
     assert client.post("/api/test/audio").json()["ok"]
     assert client.post("/api/test/llm").json()["ok"]
     assert client.post("/api/test/nas").json()["ok"]

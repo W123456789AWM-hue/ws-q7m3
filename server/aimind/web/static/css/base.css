@@ -1,5 +1,8 @@
 /* 基础元素：排版、按钮、输入框、滚动条 */
 *{box-sizing:border-box}
+/* hidden 必须真的隐藏：组件里写的 display:flex/grid 会盖掉浏览器默认的 [hidden]{display:none}，
+   关着的抽屉 / 设置弹窗就会变成“看不见但挡住鼠标”的透明层 */
+[hidden]{display:none !important}
 html,body{height:100%}
 body{margin:0;font:14px/1.6 var(--font);color:var(--label);letter-spacing:.01em;-webkit-font-smoothing:antialiased;
   background:
