@@ -68,10 +68,52 @@ def install_problem() -> str:
 
 
 # ======================= 下载与校验 =======================
-def _url(url: str, cfg: dict) -> str:
-    """设置里填了下载镜像（比如 https://ghproxy.net/）就加在前面"""
-    mirror = (cfg.get("update_mirror") or "").strip()
-    return mirror.rstrip("/") + "/" + url if mirror else url
+# 连 GitHub 的几条线路，按顺序试，记住能用的那条下次先用。
+# 国内常见情况：浏览器能上（代理软件用 PAC / SOCKS），但程序只认“系统 HTTP 代理”，直连 GitHub 会被掐断
+# （报 UNEXPECTED_EOF / 连接被重置）。所以除了 系统代理 / 直连，还会试几个公共的 GitHub 下载镜像。
+# 走哪条线路都不影响安全：清单要验数字签名，安装包要核对 sha256，被改过就拒绝。
+FALLBACK_MIRRORS = ["https://gh-proxy.com/", "https://ghfast.top/", "https://ghproxy.net/"]   # 实测可用的排前面
+_good_route: tuple[str, bool] | None = None      # 上次成功的 (镜像前缀, 是否用系统代理)
+
+
+def _routes(cfg: dict) -> list[tuple[str, bool]]:
+    user = (cfg.get("update_mirror") or "").strip()
+    mirrors = ([user] if user else []) + [""] + [m for m in FALLBACK_MIRRORS if m.rstrip("/") != user.rstrip("/")]
+    routes = [(m, proxy) for m in mirrors for proxy in (True, False)]
+    if _good_route in routes:
+        routes.remove(_good_route)
+        routes.insert(0, _good_route)
+    return routes
+
+
+def _with_mirror(url: str, mirror: str) -> str:
+    """镜像的用法是把完整地址接在后面：https://ghfast.top/https://github.com/…（只对 GitHub 地址用镜像）"""
+    if not mirror or not url.startswith("https://github.com/"):
+        return url
+    return mirror.rstrip("/") + "/" + url
+
+
+def _get(url: str, cfg: dict, timeout: float = 12, use=None):
+    """按线路依次尝试，返回 (已打开的响应, 用的线路)。use(response) 抛错也会换下一条线路重试"""
+    global _good_route
+    errors = []
+    tried = set()
+    for mirror, proxy in _routes(cfg):
+        full = _with_mirror(url, mirror)
+        if (full, proxy) in tried:
+            continue
+        tried.add((full, proxy))
+        try:
+            r = _open(full, timeout, proxy)
+            out = use(r) if use else r.read()
+            _good_route = (mirror, proxy)
+            return out
+        except Exception as e:
+            where = (mirror or "直连 GitHub") + ("（系统代理）" if proxy else "（不走代理）")
+            errors.append(f"{where}：{getattr(e, 'reason', e)}")
+    raise RuntimeError("连不上发布服务器，试过 " + str(len(errors)) + " 条线路都不行。"
+                       "如果你在用代理软件，请打开它的“系统代理”或“增强模式 / TUN”；"
+                       "也可以在 设置 → 通用 → 软件更新 → 高级 里填一个下载镜像。\n最后的错误：" + errors[-1])
 
 
 _ctx: ssl.SSLContext | None = None
@@ -92,10 +134,13 @@ def ssl_context() -> ssl.SSLContext:
     return _ctx
 
 
-def _open(url: str, timeout: float = 30):
-    # urllib 会用系统代理（Windows 注册表 / Mac 系统设置），和浏览器一样能连上 GitHub
+def _open(url: str, timeout: float = 30, proxy: bool = True):
+    """proxy=True：用系统代理（Windows 注册表 / Mac 系统设置里的 HTTP 代理）；False：直连"""
     req = urllib.request.Request(url, headers={"User-Agent": f"AIMind/{VERSION}"})
-    return urllib.request.urlopen(req, timeout=timeout, context=ssl_context())
+    handlers = [urllib.request.HTTPSHandler(context=ssl_context())]
+    if not proxy:
+        handlers.append(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers).open(req, timeout=timeout)
 
 
 PUBLIC_KEY = UPDATE_PUBLIC_KEY      # 测试时可以换成临时密钥
@@ -117,8 +162,8 @@ def verify_manifest(raw: bytes, sig_b64: bytes, public_key: str | None = None) -
 
 def fetch_manifest(cfg: dict) -> dict:
     url = (cfg.get("update_manifest_url") or "").strip() or MANIFEST_URL
-    raw = _open(_url(url, cfg)).read()
-    sig = _open(_url(url + ".sig", cfg)).read()
+    raw = _get(url, cfg)
+    sig = _get(url + ".sig", cfg)          # 上一步成功的线路会排在最前面
     return verify_manifest(raw, sig)
 
 
@@ -143,8 +188,8 @@ def download_asset(key: str, emit=lambda m: None) -> Path:
     part = dst.with_suffix(dst.suffix + ".part")
     cfg = config_mod.load()
     _st.update(downloading=key, progress=0, error="")
-    try:
-        with _open(_url(a["url"], cfg), timeout=60) as r, open(part, "wb") as f:
+    def save(r):                       # 下到一半断了会抛错，_get 会换下一条线路从头再下
+        with r, open(part, "wb") as f:
             total, got, last = int(a["size"]), 0, 0.0
             while chunk := r.read(1 << 16):
                 f.write(chunk)
@@ -153,6 +198,11 @@ def download_asset(key: str, emit=lambda m: None) -> Path:
                     last = time.time()
                     _st["progress"] = min(99, int(got * 100 / max(total, 1)))
                     emit({"type": "update", **public_state()})
+        if part.stat().st_size != a["size"]:
+            raise RuntimeError("下载不完整")
+
+    try:
+        _get(a["url"], cfg, timeout=60, use=save)
         if part.stat().st_size != a["size"] or _sha256(part) != a["sha256"]:
             part.unlink(missing_ok=True)
             raise RuntimeError("下载的文件校验不通过（可能下载不完整或被篡改），已删除，请重试")

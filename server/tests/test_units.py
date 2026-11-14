@@ -153,3 +153,35 @@ def test_update_manifest_signature_and_versions(monkeypatch):
         updater.verify_manifest(raw.replace(b"9.9.9", b"9.9.8"), sig)        # 清单被改过
     with pytest.raises(RuntimeError, match="签名"):
         updater.verify_manifest(raw, base64.b64encode(b"\0" * 64))          # 签名是假的
+
+
+def test_update_download_falls_back_to_other_routes(monkeypatch):
+    """直连 GitHub 被掐断（国内常见）：自动换镜像线路，并记住能用的那条"""
+    import ssl
+
+    import pytest
+
+    from aimind import updater
+    calls = []
+
+    class Resp:
+        def read(self):
+            return b"ok"
+
+    def fake_open(url, timeout=30, proxy=True):
+        calls.append((url, proxy))
+        if not url.startswith("https://gh-proxy.com/"):
+            raise ssl.SSLError("UNEXPECTED_EOF_WHILE_READING")
+        return Resp()
+
+    monkeypatch.setattr(updater, "_open", fake_open)
+    monkeypatch.setattr(updater, "_good_route", None)
+    url = "https://github.com/x/y/releases/latest/download/latest.json"
+    assert updater._get(url, {}) == b"ok"
+    assert calls[-1] == ("https://gh-proxy.com/" + url, True)
+    assert calls[0] == (url, True)                         # 先试系统代理直连
+    calls.clear()
+    assert updater._get(url, {}) == b"ok" and len(calls) == 1   # 第二次直接用记住的线路
+    monkeypatch.setattr(updater, "_open", lambda *a, **k: (_ for _ in ()).throw(OSError("断了")))
+    with pytest.raises(RuntimeError, match="线路"):
+        updater._get(url, {})
