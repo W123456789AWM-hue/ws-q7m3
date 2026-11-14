@@ -104,6 +104,8 @@ jobs:
         with: { channel: stable, cache: true }
       # 固定的签名密钥：以后每次打的包都能直接覆盖安装（在线更新也靠它），不丢数据
       - run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
+      # 跳过 lintVital：image_picker_android 会让 lint 崩溃（lint 自身的 bug）
+      - run: mkdir -p ~/.gradle/init.d && cp ci/no-lint-vital.gradle ~/.gradle/init.d/
       - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
       - run: flutter pub get
       - run: flutter test

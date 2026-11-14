@@ -1,0 +1,7 @@
+// Gradle 初始化脚本：打正式包时跳过 Android 的 lintVital 检查。
+// image_picker_android 在新版 Android 构建工具下会让 lint 自己崩溃（NoSuchMethodError，是 lint 的 bug，和代码无关）。
+allprojects { p ->
+    p.tasks.configureEach { t ->
+        if (t.name.startsWith('lintVital')) t.enabled = false
+    }
+}

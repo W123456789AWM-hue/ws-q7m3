@@ -293,6 +293,8 @@ allprojects { p ->
 }
 '@
       [IO.File]::WriteAllText((Join-Path $gh 'init.d\mirrors.gradle'), $init, (New-Object Text.UTF8Encoding($false)))
+      # 跳过 lintVital：image_picker_android 会让 lint 崩溃（lint 自身的 bug）
+      Copy-Item (Join-Path $proj 'ci\no-lint-vital.gradle') (Join-Path $gh 'init.d') -Force
       $env:GRADLE_USER_HOME = $gh
     }
     RunLogged 'flutter pub get' '下载依赖包'
