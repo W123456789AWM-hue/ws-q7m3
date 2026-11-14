@@ -57,6 +57,18 @@ jobs:
         run: |
           $env:AIMIND_PAYLOAD = "$PWD\dist\AIMind-Windows.zip"
           pyinstaller --noconfirm --distpath dist --workpath build/setup_work packaging/setup.spec
+      # 真的装一遍：安装程序坏了（比如里面没带主程序）就不发布
+      - name: 试装安装程序
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist -Filter 'AIMind-Setup-*.exe' | Select-Object -First 1).FullName
+          $p = Start-Process $setup -ArgumentList '--selfcheck' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Host "::error::installer selfcheck failed ($($p.ExitCode))"; exit 1 }
+          $dir = Join-Path $env:RUNNER_TEMP 'aimind_install_test'
+          $p = Start-Process $setup -ArgumentList '--silent', '--dir', $dir, '--no-shortcuts' -Wait -PassThru
+          if (Test-Path "$env:TEMP\AIMind-Setup.log") { Get-Content "$env:TEMP\AIMind-Setup.log" -Encoding utf8 | Select-Object -Last 3 | ForEach-Object { [Console]::Out.WriteLine(($_ -replace '[^\x20-\x7e]', '?')) } }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir\AIMind.exe")) { Write-Host "::error::silent install failed ($($p.ExitCode))"; exit 1 }
+          Write-Host "installer OK: $((Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB) MB installed"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows

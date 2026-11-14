@@ -277,6 +277,14 @@ def main() -> None:
                                                 在线更新：等旧版退出 → 装到原来的位置（保留原来的快捷方式）→ 重新打开
     """
     args = sys.argv[1:]
+    if "--selfcheck" in args:      # 打包后自检（云端每次都跑）：安装包里的主程序齐不齐。退出码 0 = 没问题
+        try:
+            with zipfile.ZipFile(res("payload.zip")) as z:
+                names = z.namelist()
+                ok = z.testzip() is None and any(Path(n).parts[1:] == (EXE,) for n in names)
+        except Exception:
+            ok = False
+        sys.exit(0 if ok else 3)
     if "--silent" in args:
         upgrade = "--upgrade" in args
         target = Path(_arg(args, "--dir") or (installed_dir() if upgrade else None) or DEFAULT_DIR)

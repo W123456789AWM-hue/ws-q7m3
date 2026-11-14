@@ -9,8 +9,18 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 HERE = Path(SPECPATH)
 ROOT = HERE.parent.parent
 ICON_PNG = ROOT / "mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png"
-PAYLOAD = os.environ["AIMIND_PAYLOAD"]
 SERVER = HERE.parent
+# 安装程序里固定找 payload.zip：不管传进来的 zip 叫什么名字，都先复制成这个名字再打包
+# （以前云端直接传 AIMind-Windows.zip，打出来的安装程序报“缺少 payload.zip”）
+import shutil  # noqa: E402
+
+_src = Path(os.environ["AIMIND_PAYLOAD"]).resolve()
+PAYLOAD = str(_src)
+if _src.name != "payload.zip":
+    _dst = SERVER / "build" / "setup_payload" / "payload.zip"
+    _dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(_src, _dst)
+    PAYLOAD = str(_dst)
 VERSION = {}  # 从 aimind/version.py 读（全工程只写一处）
 exec((SERVER / "aimind" / "version.py").read_text(encoding="utf-8-sig"), VERSION)
 VERSION = VERSION["VERSION"]
