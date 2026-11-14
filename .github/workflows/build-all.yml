@@ -164,5 +164,10 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then echo "::error::还没设置密钥 RELEASES_TOKEN，不能发布"; exit 1; fi
+          # 发布仓库是空的（刚建好、没有任何文件）时 GitHub 不让建发布：先放一个说明文件
+          if ! gh api "repos/$REPO/commits?per_page=1" >/dev/null 2>&1; then
+            printf '# AI 录音思考助手 · 发布\n\n这里只放安装包和在线更新清单，由云端打包自动发布。\n' > readme.md
+            gh api -X PUT "repos/$REPO/contents/README.md" -f message="初始化发布仓库" -f content="$(base64 -w0 readme.md)"
+          fi
           gh release delete "v$V" --repo "$REPO" --yes 2>/dev/null || true
           gh release create "v$V" --repo "$REPO" --title "AI 录音思考助手 v$V" --notes-file notes.md --latest release/*
