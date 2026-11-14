@@ -86,6 +86,12 @@ Windows 上打包要放在短路径（`%LOCALAPPDATA%\ai_mind_build`），工程
 - 新功能先在 `tests/test_e2e.py` 里用 `DeviceSim` 写一个场景。
 - 桌面程序的功能（如预览启动动画）由 desktop_app.py 注册到 `hub.desktop_hooks`，路由里调用；浏览器方式运行时为空。
   Mac 的启动动画是 splash.html（pywebview 本地 http 服务打开，ImageDecoder 逐帧调速）；Windows 是 splash_win.py。
-- 界面是纯 HTML/JS（`web/static/`），不用构建；文字都是中文、面向非程序员。深色科技风，颜色只在 style.css 的 `:root` 里改。
+- 界面是纯 HTML/JS（`web/static/`），不用构建（原生 ES 模块）；文字都是中文、面向非程序员。参考 Apple 设计，深浅色跟随系统。
+  - `css/`：tokens.css（颜色、圆角、动画曲线，改主题只改这里）→ base → layout → components → settings → motion（所有过渡动画）。
+  - `app.js` 只负责把 `js/` 下的模块装起来；每个模块管一块界面，`initXxx()` 里用 `actions({...})` 注册操作。
+  - **不写内联 onclick**：元素标 `data-action="名字"`（参数放 `data-arg`）/ `data-change` / `data-input`，由 `js/dom.js` 统一分发。
+  - 模块间通信用 `js/state.js` 的 `state` + `emit/on`，不要互相直接调渲染函数造成循环依赖。
+  - 浮层（抽屉、设置弹窗、菜单、提示条）一律 `hidden` 起步，用 `js/anim.js` 的 `show/hide` 开关（带过渡）；换内容用 `swap()`。
+  - 加设置项：`js/settings/schema.js` 加一行（分类、说明、`when` 条件、`adv` 高级、`kw` 搜索词）+ `config.py` 的 DEFAULTS。改了自动保存。
 - 界面性能：列表整页渲染时拼好字符串一次放进去；实时消息只追加/替换变化的那一项（`addCaption`、`upsertReview`）。
 - 不要替用户注册账号或填写 API Key；测试只用 `tools/mock_openai.py`。

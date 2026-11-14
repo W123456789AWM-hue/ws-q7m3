@@ -1,0 +1,71 @@
+/* 设计变量：颜色、圆角、阴影、字体、动画曲线。改主题只改这一个文件。
+   参考 Apple 的系统色和材质；默认跟随系统深浅色，设置里可以固定（html[data-theme]）。 */
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI Variable Text","Microsoft YaHei UI","Segoe UI",system-ui,sans-serif;
+  --mono:"SF Mono",ui-monospace,"Cascadia Mono",Consolas,"Microsoft YaHei UI",monospace;
+
+  --r-xs:6px; --r-sm:8px; --r:12px; --r-lg:16px; --r-xl:20px;
+
+  /* 动画：Apple 风格的缓动（快出慢停），所有过渡都用这几个 */
+  --ease:cubic-bezier(.32,.72,0,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-in:cubic-bezier(.4,0,1,1);
+  --t-fast:.16s; --t:.28s; --t-slow:.42s;
+
+  /* 深色（默认） */
+  --bg:#000;
+  --bg-elev:#0d0d10;
+  --surface:rgba(28,28,30,.72);
+  --surface-2:rgba(44,44,46,.6);
+  --surface-solid:#1c1c1e;
+  --fill:rgba(118,118,128,.24);
+  --fill-2:rgba(118,118,128,.16);
+  --sep:rgba(84,84,88,.42);
+  --sep-soft:rgba(84,84,88,.24);
+  --label:#f5f5f7;
+  --label-2:rgba(235,235,245,.62);
+  --label-3:rgba(235,235,245,.36);
+  --accent:#0a84ff; --accent-ink:#fff; --accent-soft:rgba(10,132,255,.16); --glow:rgba(10,132,255,.42);
+  --tech:#64d2ff;              /* 科技感的点缀色：计量条、细线、等宽数字 */
+  --red:#ff453a; --red-soft:rgba(255,69,58,.15);
+  --orange:#ff9f0a; --yellow:#ffd60a; --green:#30d158; --teal:#40c8e0; --purple:#bf5af2; --indigo:#5e5ce6;
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7),0 0 0 .5px rgba(255,255,255,.06);
+  --shadow-lg:0 30px 80px -20px rgba(0,0,0,.85),0 0 0 .5px rgba(255,255,255,.08);
+  --blur:saturate(180%) blur(24px);
+  --grid:rgba(255,255,255,.028);
+  color-scheme:dark;
+}
+
+/* 浅色：系统是浅色且没固定深色时，或者设置里选了浅色 */
+@media (prefers-color-scheme:light){ :root:not([data-theme=dark]){ --light:1 } }
+:root[data-theme=light]{ --light:1 }
+@media (prefers-color-scheme:light){
+  :root:not([data-theme=dark]){
+    --bg:#f5f5f7; --bg-elev:#fbfbfd;
+    --surface:rgba(255,255,255,.78); --surface-2:rgba(255,255,255,.6); --surface-solid:#fff;
+    --fill:rgba(120,120,128,.16); --fill-2:rgba(120,120,128,.1);
+    --sep:rgba(60,60,67,.22); --sep-soft:rgba(60,60,67,.12);
+    --label:#1d1d1f; --label-2:rgba(60,60,67,.66); --label-3:rgba(60,60,67,.36);
+    --accent:#007aff; --accent-soft:rgba(0,122,255,.12); --glow:rgba(0,122,255,.3);
+    --tech:#0a84ff; --red:#ff3b30; --red-soft:rgba(255,59,48,.1);
+    --orange:#ff9500; --yellow:#ffcc00; --green:#34c759; --teal:#30b0c7; --purple:#af52de; --indigo:#5856d6;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.06);
+    --shadow-lg:0 30px 80px -24px rgba(0,0,0,.3),0 0 0 .5px rgba(0,0,0,.08);
+    --grid:rgba(0,0,0,.03);
+    color-scheme:light;
+  }
+}
+:root[data-theme=light]{
+  --bg:#f5f5f7; --bg-elev:#fbfbfd;
+  --surface:rgba(255,255,255,.78); --surface-2:rgba(255,255,255,.6); --surface-solid:#fff;
+  --fill:rgba(120,120,128,.16); --fill-2:rgba(120,120,128,.1);
+  --sep:rgba(60,60,67,.22); --sep-soft:rgba(60,60,67,.12);
+  --label:#1d1d1f; --label-2:rgba(60,60,67,.66); --label-3:rgba(60,60,67,.36);
+  --accent:#007aff; --accent-soft:rgba(0,122,255,.12); --glow:rgba(0,122,255,.3);
+  --tech:#0a84ff; --red:#ff3b30; --red-soft:rgba(255,59,48,.1);
+  --orange:#ff9500; --yellow:#ffcc00; --green:#34c759; --teal:#30b0c7; --purple:#af52de; --indigo:#5856d6;
+  --shadow:0 10px 30px -12px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.06);
+  --shadow-lg:0 30px 80px -24px rgba(0,0,0,.3),0 0 0 .5px rgba(0,0,0,.08);
+  --grid:rgba(0,0,0,.03);
+  color-scheme:light;
+}

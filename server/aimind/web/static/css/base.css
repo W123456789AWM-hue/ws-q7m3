@@ -1,0 +1,67 @@
+/* 基础元素：排版、按钮、输入框、滚动条 */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:14px/1.6 var(--font);color:var(--label);letter-spacing:.01em;-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(1100px 520px at 72% -12%,var(--accent-soft),transparent 62%),
+    linear-gradient(var(--grid) 1px,transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/44px 44px,
+    var(--bg);
+  background-attachment:fixed;display:flex;flex-direction:column;overflow:hidden;
+  transition:background-color var(--t) var(--ease),color var(--t) var(--ease)}
+::selection{background:var(--accent-soft)}
+h1,h2,h3,h4,p{margin:0}
+.num,time,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hint{font-size:12px;color:var(--label-2)}
+.spacer{flex:1}
+
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:var(--fill);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--label-3);background-clip:padding-box;border:3px solid transparent}
+*::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- 按钮 ---------- */
+button{font:inherit;font-size:13px;font-weight:500;cursor:pointer;border:0;border-radius:var(--r-sm);padding:6px 13px;
+  display:inline-flex;align-items:center;gap:6px;color:var(--label);background:var(--fill-2);
+  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),
+    box-shadow var(--t) var(--ease),opacity var(--t-fast) var(--ease)}
+button:hover{background:var(--fill)}
+button:active{transform:scale(.97)}
+button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),0 0 0 1px var(--accent)}
+button:disabled{opacity:.38;pointer-events:none}
+button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+button.primary{background:var(--accent);color:var(--accent-ink);box-shadow:0 6px 20px -8px var(--glow)}
+button.primary:hover{filter:brightness(1.08)}
+button.danger,button.rec{background:var(--red);color:#fff;box-shadow:0 6px 20px -8px var(--red)}
+button.ghost{background:transparent;color:var(--label-2)}
+button.ghost:hover{background:var(--fill-2);color:var(--label)}
+button.icon{padding:6px}
+button.icon svg{width:18px;height:18px}
+button.link{background:none;padding:0;color:var(--accent)}
+button.link:hover{text-decoration:underline}
+
+/* ---------- 输入框 ---------- */
+input,select,textarea{font:inherit;font-size:13px;color:var(--label);background:var(--fill-2);border:0;border-radius:var(--r-sm);
+  padding:7px 10px;outline:none;transition:box-shadow var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 1px var(--accent);background:var(--surface-solid)}
+textarea{resize:vertical;min-height:72px;line-height:1.55}
+select{cursor:pointer}
+select option{background:var(--surface-solid);color:var(--label)}
+input[readonly]{color:var(--label-2);font-family:var(--mono);font-size:12px}
+
+/* 开关（Apple 风格） */
+.switch{appearance:none;-webkit-appearance:none;width:38px;height:23px;border-radius:99px;background:var(--fill);position:relative;
+  cursor:pointer;flex:none;padding:0;transition:background-color var(--t) var(--ease)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform var(--t) var(--ease)}
+.switch:checked{background:var(--green)}
+.switch:checked::after{transform:translateX(15px)}
+.switch:focus{box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* 分段控件：滑块跟着选中项移动（位置由 anim.js 计算） */
+.segmented{position:relative;display:inline-flex;padding:2px;border-radius:9px;background:var(--fill-2)}
+.segmented button{position:relative;z-index:1;background:transparent;padding:4px 12px;border-radius:7px;font-size:12.5px;color:var(--label-2)}
+.segmented button.on{color:var(--label)}
+.segmented button:hover{background:transparent;color:var(--label)}
+.segmented .thumb{position:absolute;z-index:0;top:2px;bottom:2px;left:0;border-radius:7px;background:var(--surface-solid);
+  box-shadow:0 1px 4px rgba(0,0,0,.2),0 0 0 .5px var(--sep-soft);transition:transform var(--t) var(--ease),width var(--t) var(--ease)}

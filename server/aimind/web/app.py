@@ -27,7 +27,16 @@ async def lifespan(_app):
 app = FastAPI(title="AI 录音思考助手", lifespan=lifespan)
 for r in (routes_core, routes_devices, routes_eval):
     app.include_router(r.router)
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
+class _Static(StaticFiles):
+    """界面文件每次都和服务端核对一下（有 ETag，没改就是 304，很快）：升级后不会用到旧的缓存脚本"""
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/static", _Static(directory=STATIC), name="static")
 
 
 def token_ok(tok: str) -> bool:

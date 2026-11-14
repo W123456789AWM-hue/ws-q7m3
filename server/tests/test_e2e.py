@@ -19,6 +19,17 @@ def done_session(client, sid=None):
 def test_pages_and_settings(client):
     assert client.get("/").status_code == 200
     assert client.get("/static/app.js").status_code == 200
+    # 界面是 ES 模块：入口 import 的每个文件都要能取到
+    import re
+    from pathlib import Path
+    static = Path(__file__).resolve().parent.parent / "aimind" / "web" / "static"
+    for js in [static / "app.js", *static.glob("js/**/*.js")]:
+        for imp in re.findall(r"from '(\.[^']+)'", js.read_text(encoding="utf-8")):
+            target = (js.parent / imp).resolve().relative_to(static).as_posix()
+            assert client.get("/static/" + target).status_code == 200, (js.name, imp)
+    for css in re.findall(r'href="(/static/css/[^"]+)"', client.get("/").text):
+        assert client.get(css).status_code == 200, css
+    assert client.get("/static/js/dom.js").headers.get("cache-control") == "no-cache"
     assert client.post("/api/test/audio").json()["ok"]
     assert client.post("/api/test/llm").json()["ok"]
     assert client.post("/api/test/nas").json()["ok"]

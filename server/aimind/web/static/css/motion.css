@@ -1,0 +1,37 @@
+/* 过渡动画：所有浮层的开 / 关、内容切换、列表新增。
+   浮层机制（js/anim.js）：打开 = 去掉 hidden → 下一帧加 [data-open]；关闭 = 去掉 [data-open] → 动画结束后加 hidden。 */
+
+.mask{opacity:0;transition:opacity var(--t) var(--ease)}
+.mask[data-open]{opacity:1}
+
+.drawer{opacity:0;transform:translateX(28px) scale(.985);transition:opacity var(--t) var(--ease),transform var(--t-slow) var(--ease)}
+.drawer[data-open]{opacity:1;transform:none}
+
+.sheet{opacity:0;scale:.96;transition:opacity var(--t) var(--ease),scale var(--t-slow) var(--ease)}
+.sheet[data-open]{opacity:1;scale:1}
+
+.menu{opacity:0;transform-origin:top right;transform:scale(.94) translateY(-4px);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t) var(--ease)}
+.menu[data-open]{opacity:1;transform:none}
+
+#toast{opacity:0;transform:translate(-50%,12px) scale(.98);transition:opacity var(--t) var(--ease),transform var(--t) var(--ease)}
+#toast[data-open]{opacity:1;transform:translate(-50%,0)}
+
+/* 内容切换（设置分类、报告周期、历史 ↔ 当前）：先淡出、换内容、再淡入 */
+.swap-out{opacity:0;transform:translateY(6px);transition:opacity var(--t-fast) var(--ease-in),transform var(--t-fast) var(--ease-in)}
+.swap-in{animation:swapIn var(--t) var(--ease-out)}
+@keyframes swapIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+@keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+@keyframes cardUpdate{0%{box-shadow:var(--shadow),0 0 0 1.5px var(--accent)}100%{box-shadow:var(--shadow),0 0 0 0 transparent}}
+@keyframes capIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes scan{from{background-position:100% 0}to{background-position:-100% 0}}
+@keyframes breathe{50%{transform:scale(1.06);opacity:.85}}
+
+/* 系统设置了“减少动态效果”：保留透明度变化，去掉位移和循环动画 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important}
+  .drawer,.sheet,.menu,#toast{transform:none !important;scale:1 !important}
+  .row.flash{animation-duration:1.5s !important}   /* 搜索命中的高亮是功能性的，保留 */
+}

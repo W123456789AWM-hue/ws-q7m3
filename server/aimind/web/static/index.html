@@ -3,128 +3,149 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>AI 录音思考助手</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230a84ff'/%3E%3Cstop offset='1' stop-color='%23bf5af2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M9 18v-4M13 21V11M17 23V9M21 20v-8M25 17v-2' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<!-- 样式按用途拆成几份：设计变量 → 基础元素 → 布局 → 组件 → 设置 → 动画 -->
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/layout.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/settings.css">
+<link rel="stylesheet" href="/static/css/motion.css">
+<script>try { const t = localStorage.getItem('aim-theme'); if (t && t !== 'auto') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
-    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
-    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
-    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
-    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
-    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
-    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 13h5M10 17h5"/></symbol>
-    <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9"/></symbol>
-    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
-  </defs>
-</svg>
+<!-- 图标（线性，1.8 粗细） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 3 5 3 3 0 0 0 5 1V5a3 3 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-3 5 3 3 0 0 1-5 1"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 14h18M7 17h.01"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9l5 3-5 3z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></symbol>
+</defs></svg>
 
 <header>
-  <div class="brand"><span class="logo"></span><b>AI MIND</b><small>录音思考助手</small></div>
-  <span id="pill" class="pill"><i></i><span>待机</span></span>
+  <div class="brand"><span class="logo"></span><b>AI 录音思考助手</b><small>AI MIND</small></div>
+  <span id="status" class="status"><i></i><span>待机</span></span>
   <div class="meter" title="电脑麦克风音量"><i id="lv"></i></div>
   <div class="actions">
-    <button id="btnRec" class="primary" onclick="toggleRec()" title="用这台电脑的麦克风录音；手机等设备可以同时录"><svg><use href="#i-mic"/></svg><span>电脑麦克风录音</span></button>
-    <button id="btnReview" onclick="reviewNow()" disabled title="不等间隔，马上把上次复盘之后的内容交给 AI"><svg><use href="#i-spark"/></svg><span>立即复盘</span></button>
-    <button id="btnFinish" onclick="finishNow()" disabled title="结束这一场，马上做整场总复盘"><svg><use href="#i-flag"/></svg><span>结束本场</span></button>
+    <button id="btnRec" class="primary" data-action="toggleRec" title="用这台电脑的麦克风录音；手机等设备可以同时录"><svg><use href="#i-mic"/></svg><span>电脑麦克风录音</span></button>
+    <button id="btnReview" data-action="reviewNow" disabled title="不等间隔，马上把上次复盘之后的内容交给 AI"><svg><use href="#i-spark"/></svg><span>立即复盘</span></button>
+    <button id="btnFinish" data-action="finishNow" disabled title="结束这一场，马上做整场总复盘"><svg><use href="#i-flag"/></svg><span>结束本场</span></button>
   </div>
   <span id="modelMsg" class="hint"></span>
   <span class="spacer"></span>
   <nav class="tools">
-    <button class="ghost" onclick="openPhone()" title="手机、平板等录音设备怎么连上来"><svg><use href="#i-link"/></svg><span>设备连接</span></button>
-    <button class="ghost" onclick="openDaily()" title="日复盘 / 月复盘 / 年复盘"><svg><use href="#i-sun"/></svg><span>复盘报告</span></button>
-    <button class="ghost" onclick="openHistory()" title="以前每一场的记录"><svg><use href="#i-clock"/></svg><span>历史</span></button>
+    <button class="ghost" data-action="openDevices" title="手机、平板等录音设备怎么连上来"><svg><use href="#i-link"/></svg><span>设备连接</span></button>
+    <button class="ghost" data-action="openReports" title="日复盘 / 月复盘 / 年复盘"><svg><use href="#i-cal"/></svg><span>复盘报告</span></button>
+    <button class="ghost" data-action="openHistory" title="以前每一场的记录"><svg><use href="#i-clock"/></svg><span>历史</span></button>
     <div class="more">
-      <button class="ghost icon" onclick="toggleMore(event)" title="更多"><svg><use href="#i-more"/></svg></button>
-      <div class="menu" id="moreMenu">
-        <button onclick="document.getElementById('file').click()"><svg><use href="#i-file"/></svg>导入 WAV 录音</button>
-        <button onclick="openDrawer('textDrawer')"><svg><use href="#i-text"/></svg>文字测试</button>
-        <button onclick="openEval()"><svg><use href="#i-gauge"/></svg>识别测试（本地识别）</button>
+      <button class="ghost icon" data-action="toggleMenu" title="更多"><svg><use href="#i-more"/></svg></button>
+      <div class="menu" id="moreMenu" hidden>
+        <button data-action="pickWav"><svg><use href="#i-file"/></svg>导入 WAV 录音</button>
+        <button data-action="openTextTest"><svg><use href="#i-text"/></svg>文字测试</button>
+        <button data-action="openEval"><svg><use href="#i-gauge"/></svg>识别测试（本地识别）</button>
       </div>
     </div>
-    <button class="ghost icon" onclick="openSettings()" title="设置"><svg><use href="#i-gear"/></svg></button>
+    <button class="ghost icon" data-action="openSettings" title="设置（Ctrl+,）"><svg><use href="#i-gear"/></svg></button>
   </nav>
-  <input type="file" id="file" accept=".wav" hidden onchange="importWav(this)">
+  <input type="file" id="file" accept=".wav" hidden data-change="importWav">
 </header>
 
-<main>
+<main id="main">
   <section class="col" id="captions">
-    <h2><span>听写</span><small>每段语音按录音时间排列，AI 复盘时填上文字</small></h2>
+    <div class="col-head"><h2>听写</h2><small>按录音时间排列，AI 复盘时填上文字</small></div>
     <div id="capList"></div>
   </section>
   <section class="col" id="right">
     <div id="viewing"></div>
     <div id="summaryBox"></div>
-    <h2><span>AI 复盘</span><small id="nextInfo"></small></h2>
-    <div id="reviews"><div class="empty">
-      <div class="orb"></div>
-      <p>点上方「电脑麦克风录音」，或者在手机 App 里开始录音（几台设备可以同时录）。</p>
-      <p class="sub">AI 会直接<b>听录音</b>：写出听写文字，指出你没注意到的点、潜在需求，还有从语气里听出来的东西。<br>
-      复盘方式可选实时（每说完一段）或自定义周期（默认每 30 分钟）；所有设备停止时再做一次整场总复盘。</p>
-    </div></div>
+    <div class="col-head"><h2>AI 复盘</h2><small id="nextInfo"></small></div>
+    <div id="reviews"></div>
   </section>
 </main>
-<footer><span id="sessInfo"></span><span id="nasInfo"></span><span class="spacer"></span><span id="usageInfo" title="今天 AI 的用量（点开设置看明细）" onclick="openSettings('usage')"></span></footer>
+<footer><span id="sessInfo"></span><span id="nasInfo"></span><span class="spacer"></span>
+  <span id="usageInfo" data-action="openSettings" data-arg="usage" title="今天 AI 的用量（点开看明细）"></span></footer>
 
-<div class="mask" id="mask" onclick="closeDrawers()"></div>
+<!-- 浮层：都从 hidden 开始，开 / 关由 js/anim.js 带动画切换 -->
+<div class="mask" id="mask" hidden data-action="closeAll"></div>
 
-<div class="drawer" id="settingsDrawer">
-  <div class="dh"><b>设置</b><button class="primary" onclick="saveSettings()">保存</button><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
-  <div class="db fg" id="settingsForm"></div>
+<div class="sheet" id="settingsSheet" hidden role="dialog" aria-label="设置">
+  <aside class="side">
+    <div class="search"><svg><use href="#i-search"/></svg><input id="setSearch" placeholder="搜索设置" autocomplete="off" data-input="searchSettings"></div>
+    <div class="results" id="setResults" hidden></div>
+    <div id="setCats"></div>
+  </aside>
+  <section class="pane">
+    <div class="pane-head"><h3 id="setTitle">设置</h3><span class="saved" id="savedTip">已保存</span>
+      <button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+    <div class="pane-body" id="setBody"></div>
+  </section>
 </div>
 
-<div class="drawer" id="historyDrawer">
-  <div class="dh"><b>历史记录</b><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+<div class="drawer" id="historyDrawer" hidden>
+  <div class="dh"><h3>历史记录</h3><button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
   <div class="db" id="histList"></div>
 </div>
 
-<div class="drawer wide" id="evalDrawer">
-  <div class="dh"><b>识别测试：用你自己的录音，衡量哪个识别模型更准</b><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+<div class="drawer" id="devicesDrawer" hidden>
+  <div class="dh"><h3>设备连接</h3><button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+  <div class="db" id="devicesBody"></div>
+</div>
+
+<div class="drawer" id="reportsDrawer" hidden>
+  <div class="dh"><h3>复盘报告</h3>
+    <button class="primary" id="btnMakeReport" data-action="makeReport">生成</button>
+    <button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+  <div class="rbar">
+    <div class="segmented" id="periodTabs">
+      <button data-action="setPeriod" data-arg="day" class="on">日</button>
+      <button data-action="setPeriod" data-arg="month">月</button>
+      <button data-action="setPeriod" data-arg="year">年</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="ghost icon" data-action="stepPeriod" data-arg="-1" title="上一个">‹</button>
+    <input type="date" id="dayKey" data-change="loadReport">
+    <input type="month" id="monthKey" data-change="loadReport" hidden>
+    <input type="number" id="yearKey" min="2020" max="2100" data-change="loadReport" hidden>
+    <button class="ghost icon" data-action="stepPeriod" data-arg="1" title="下一个">›</button>
+  </div>
+  <div class="db md" id="reportBody"></div>
+</div>
+
+<div class="drawer" id="textDrawer" hidden>
+  <div class="dh"><h3>文字测试</h3><button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
+  <div class="db">
+    <p class="hint">不用录音，直接粘贴一段话（比如一段聊天记录或你的想法），当作一次复盘交给 AI，看看发散分析的效果。</p>
+    <textarea id="testText" style="width:100%;min-height:220px;margin-top:12px" placeholder="例如：最近在想要不要辞职自己做咖啡店，存款大概 30 万，家里有点担心……"></textarea>
+    <div style="margin-top:10px"><button class="primary" data-action="analyzeText">开始分析</button></div>
+  </div>
+</div>
+
+<div class="drawer wide" id="evalDrawer" hidden>
+  <div class="dh"><h3>识别测试：用你自己的录音，衡量哪个识别模型更准</h3><button class="ghost icon" data-action="closeAll" title="关闭"><svg><use href="#i-x"/></svg></button></div>
   <div class="db" id="evalBody"></div>
 </div>
 
-<div class="drawer" id="phoneDrawer">
-  <div class="dh"><b>设备连接</b><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
-  <div class="db" id="phoneBody"></div>
-</div>
+<div id="toast" hidden></div>
 
-<div class="drawer" id="dailyDrawer">
-  <div class="dh"><b id="dailyTitle">复盘报告</b>
-    <button class="primary" onclick="makeDaily()" id="btnMakeReport">生成</button><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
-  <div class="rbar">
-    <div class="seg" id="periodTabs">
-      <button data-p="day" class="on" onclick="setPeriod('day')">日</button>
-      <button data-p="month" onclick="setPeriod('month')">月</button>
-      <button data-p="year" onclick="setPeriod('year')">年</button>
-    </div>
-    <span class="spacer"></span>
-    <button class="ghost icon" onclick="stepPeriod(-1)" title="上一个">‹</button>
-    <input type="date" id="dailyDate" onchange="loadDaily()">
-    <input type="month" id="monthDate" onchange="loadDaily()" hidden>
-    <input type="number" id="yearDate" min="2020" max="2100" onchange="loadDaily()" hidden>
-    <button class="ghost icon" onclick="stepPeriod(1)" title="下一个">›</button>
-  </div>
-  <div class="db md" id="dailyBody"></div>
-</div>
-
-<div class="drawer" id="textDrawer">
-  <div class="dh"><b>文字测试</b><button class="ghost icon" onclick="closeDrawers()" title="关闭"><svg><use href="#i-x"/></svg></button></div>
-  <div class="db fg">
-    <p class="hint">不用录音，直接粘贴一段话（比如一段聊天记录或你的想法），当作一次复盘交给 AI，看看发散分析的效果。适合调整提示词时快速试验。</p>
-    <textarea id="testText" style="min-height:220px" placeholder="例如：最近在想要不要辞职自己做咖啡店，存款大概 30 万，家里有点担心……"></textarea>
-    <div class="row"><button class="primary" onclick="analyzeText()">开始分析</button></div>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script src="/static/app.js"></script>
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>
