@@ -30,6 +30,11 @@ STAGE=build/mac/dmg; rm -rf "$STAGE"; mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/应用程序"
 rm -f dist/AIMind-Mac.dmg
-hdiutil create -volname "AI录音思考助手" -srcfolder "$STAGE" -ov -format UDZO dist/AIMind-Mac.dmg
+# hdiutil 偶尔报 “Resource busy”（系统还在索引刚生成的文件），等几秒重试
+for i in 1 2 3 4 5; do
+  hdiutil create -volname "AI录音思考助手" -srcfolder "$STAGE" -ov -format UDZO dist/AIMind-Mac.dmg && break
+  [ "$i" = 5 ] && exit 1
+  echo "hdiutil 失败，${i}0 秒后重试…"; sleep $((i * 10))
+done
 echo
 echo "完成：server/dist/AIMind-Mac.dmg"
