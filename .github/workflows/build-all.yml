@@ -1,8 +1,12 @@
-# 云端一次打出四个平台的安装包（不用自己的电脑装任何东西，也不需要 Mac）：
-#   电脑端：Windows 安装包 + 绿色版、Mac（苹果芯片 / Intel）dmg
-#   手机端：安卓 APK、iPhone 未签名 IPA
-# 用法：把整个 aimind 文件夹上传到 GitHub（私有仓库即可）→ 仓库的 Actions 页面 → Build all → Run workflow，
-# 跑完后在运行结果页面底部的 Artifacts 里下载。
+# 云端打包 + 发布在线更新。
+#
+# 平时：仓库的 Actions 页面 → Build all → Run workflow，只打包（在运行结果的 Artifacts 里下载）。
+# 发布新版本：改 server/aimind/version.py 的 VERSION → 提交 → 打同名标签并推送：
+#     git tag v0.9.2 && git push origin v0.9.2
+#   会打包四个平台，然后自动发布到公开的发布仓库（只放安装包），所有装了程序的电脑 / 手机都会收到更新提示。
+#   发布需要仓库 Settings → Secrets and variables → Actions 里有两个密钥：
+#     UPDATE_SIGNING_KEY  更新清单的签名私钥（和程序里内置的公钥配对）
+#     RELEASES_TOKEN      能往发布仓库上传的访问令牌（fine-grained，只给发布仓库 Contents: Read and write）
 name: Build all
 
 on:
@@ -11,8 +15,24 @@ on:
     tags: ["v*"]
 
 jobs:
+  version:
+    name: 版本号
+    runs-on: ubuntu-latest
+    outputs:
+      v: ${{ steps.v.outputs.v }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          V=$(python3 -c "exec(open('server/aimind/version.py').read()); print(VERSION)")
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$V" ]]; then
+            echo "::error::标签 ${GITHUB_REF#refs/tags/} 和 server/aimind/version.py 里的版本 $V 不一致"; exit 1
+          fi
+
   windows:
     name: 电脑端 Windows
+    needs: version
     runs-on: windows-latest
     defaults: { run: { working-directory: server } }
     steps:
@@ -27,7 +47,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path build/dist/AIMind -DestinationPath dist/AIMind-Windows.zip
-      - name: 安装程序 AIMind-Setup.exe
+      - name: 安装程序 AIMind-Setup-<版本>.exe
         shell: pwsh
         run: |
           $env:AIMIND_PAYLOAD = "$PWD\dist\AIMind-Windows.zip"
@@ -40,11 +60,12 @@ jobs:
 
   mac:
     name: 电脑端 Mac (${{ matrix.arch }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-latest, arch: apple-silicon }
+          - { runner: macos-latest, arch: arm64 }
           - { runner: macos-15-intel, arch: intel }
     runs-on: ${{ matrix.runner }}
     defaults: { run: { working-directory: server } }
@@ -53,7 +74,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: bash packaging/build_mac.sh
-      - run: mv dist/AIMind-Mac.dmg "dist/AIMind-Mac-${{ matrix.arch }}.dmg"
+      - run: mv dist/AIMind-Mac.dmg "dist/AIMind-${{ needs.version.outputs.v }}-mac-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-mac-${{ matrix.arch }}
@@ -62,6 +83,7 @@ jobs:
 
   android:
     name: 手机端 安卓
+    needs: version
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: mobile } }
     steps:
@@ -70,20 +92,26 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
-      # 固定的签名密钥：以后每次打的包都能直接覆盖安装，不丢数据
+      # 固定的签名密钥：以后每次打的包都能直接覆盖安装（在线更新也靠它），不丢数据
       - run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
       - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
       - run: flutter pub get
       - run: flutter test
-      - run: flutter build apk --release --split-per-abi
+      - run: |
+          V=${{ needs.version.outputs.v }}
+          flutter build apk --release --split-per-abi --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V
+          cd build/app/outputs/flutter-apk
+          mv app-arm64-v8a-release.apk "AIMind-$V-android-arm64.apk"
+          mv app-armeabi-v7a-release.apk "AIMind-$V-android-armv7.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: mobile-android-apk
-          path: mobile/build/app/outputs/flutter-apk/*-release.apk
+          path: mobile/build/app/outputs/flutter-apk/AIMind-*.apk
           if-no-files-found: error
 
   ios:
     name: 手机端 iPhone（未签名）
+    needs: version
     runs-on: macos-latest
     defaults: { run: { working-directory: mobile } }
     steps:
@@ -93,13 +121,48 @@ jobs:
       - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
       - run: bash scripts/setup_ios.sh
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
       - run: |
+          V=${{ needs.version.outputs.v }}
+          flutter build ios --release --no-codesign --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V
           mkdir Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry ai_mind_unsigned.ipa Payload
+          zip -qry "AIMind-$V-ios-unsigned.ipa" Payload
       - uses: actions/upload-artifact@v4
         with:
           name: mobile-ios-unsigned-ipa
-          path: mobile/ai_mind_unsigned.ipa
+          path: mobile/AIMind-*.ipa
           if-no-files-found: error
+
+  release:
+    name: 发布在线更新
+    needs: [version, windows, mac, android, ios]
+    if: startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.windows.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      V: ${{ needs.version.outputs.v }}
+      REPO: W123456789AWM-hue/aimind-releases
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: 整理安装包
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "AIMind-Setup-$V.exe" -o -name "AIMind-$V-*" \) -exec cp {} release/ \;
+          ls -la release
+          git log -1 --format=%B > notes.md       # 更新说明 = 这次提交的说明
+      - name: 生成并签名 latest.json
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then echo "::error::还没设置密钥 UPDATE_SIGNING_KEY，不能发布"; exit 1; fi
+          python3 server/packaging/make_release.py --version "$V" --dir release --notes-file notes.md \
+            --base-url "https://github.com/$REPO/releases/download/v$V"
+      - name: 上传到发布仓库
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::error::还没设置密钥 RELEASES_TOKEN，不能发布"; exit 1; fi
+          gh release delete "v$V" --repo "$REPO" --yes 2>/dev/null || true
+          gh release create "v$V" --repo "$REPO" --title "AI 录音思考助手 v$V" --notes-file notes.md --latest release/*

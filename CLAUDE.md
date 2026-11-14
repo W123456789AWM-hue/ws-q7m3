@@ -33,6 +33,18 @@ scripts/package.sh      打包给用户的 zip
 .github/workflows/build-all.yml  云端打包四个平台（Windows exe、Mac dmg、安卓 APK、iPhone 未签名 IPA）
 ```
 
+## 版本与在线更新
+
+- 版本号只写在 `server/aimind/version.py` 的 `VERSION`（打包配置、安装程序、手机 App 都从这里 / 标签来）。
+- **发布新版本**：改 VERSION → 提交（提交说明就是给用户看的更新说明）→ `git tag v<版本> && git push origin v<版本>`。
+  云端 `.github/workflows/build-all.yml` 打包四个平台，`release` 任务用 `packaging/make_release.py` 生成并签名 `latest.json`，
+  上传到公开的发布仓库 `aimind-releases`（只放安装包）。标签和 VERSION 不一致会直接失败。
+- 签名：Ed25519（`aimind/ed25519.py` 纯 Python）。公钥写在 version.py；私钥在 GitHub 仓库密钥 `UPDATE_SIGNING_KEY`，
+  本机备份在 `%LOCALAPPDATA%\ai_mind_build\release-signing-key.txt`。**私钥丢了 = 已装的程序再也收不到更新**，不要提交进仓库。
+- 程序端 `aimind/updater.py`：检查（验签）→ 下载（核对大小 + sha256）→ Windows 调安装程序 `--silent --upgrade --wait-pid --relaunch`、
+  Mac 用脚本替换 .app。录音中不更新。手机 App 通过电脑的 `/api/update/mobile`、`/api/update/file/…` 更新。
+- 本机测试更新：设置项 `update_manifest_url` 指向自己搭的发布目录（见 tests/test_e2e.py 的 test_online_update_*）。
+
 ## 复盘层级
 
 - 小复盘（阶段复盘）：录音中按 `review_mode`（realtime / interval）触发，engine.py。

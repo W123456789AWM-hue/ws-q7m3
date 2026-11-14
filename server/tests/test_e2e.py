@@ -156,3 +156,57 @@ def test_day_month_year_reports(client):
     assert "2026-10" in client.get("/api/reports?period=month").json()
     assert client.get("/api/report?period=year&key=2026").json()["md"] == y["md"]
     assert client.post("/api/report?period=month&key=2019-01").status_code == 400   # 没有内容
+
+
+def test_online_update_via_local_release_server(client, monkeypatch, tmp_path):
+    """模拟发布服务器：签名清单 + 安装包。检查更新、手机通过电脑下载 APK、文件被篡改时拒绝"""
+    import base64
+    import hashlib
+    import json
+    import threading
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    from aimind import ed25519, updater
+
+    apk = b"PK fake apk " * 1000
+    (tmp_path / "AIMind-99.0.0-android-arm64.apk").write_bytes(apk)
+    (tmp_path / "AIMind-Setup-99.0.0.exe").write_bytes(b"MZ fake exe")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(tmp_path)))
+    srv.RequestHandlerClass.log_message = lambda *a: None
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    def publish(apk_sha):
+        name = "AIMind-99.0.0-android-arm64.apk"
+        assets = {"android-arm64": {"name": name, "url": f"{base}/{name}", "size": len(apk), "sha256": apk_sha},
+                  "windows": {"name": "AIMind-Setup-99.0.0.exe", "url": f"{base}/AIMind-Setup-99.0.0.exe", "size": 11,
+                              "sha256": hashlib.sha256(b"MZ fake exe").hexdigest()}}
+        raw = json.dumps({"version": "99.0.0", "notes": "测试版本", "assets": assets}).encode()
+        (tmp_path / "latest.json").write_bytes(raw)
+        (tmp_path / "latest.json.sig").write_bytes(base64.b64encode(ed25519.sign(seed, raw)))
+
+    seed = bytes(range(1, 33))
+    monkeypatch.setattr(updater, "PUBLIC_KEY", base64.b64encode(ed25519.public_key(seed)).decode())
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path / "cache")
+    publish(hashlib.sha256(apk).hexdigest())
+    client.post("/api/config", json={"update_manifest_url": f"{base}/latest.json"})
+    try:
+        st = client.post("/api/update/check").json()
+        assert st["latest"] == "99.0.0" and not st["error"]
+        m = client.get("/api/update/mobile?platform=android&abi=arm64-v8a").json()
+        assert m["latest"] == "99.0.0" and m["asset"]["size"] == len(apk)
+        assert client.get("/api/update/file/android-arm64").content == apk
+        assert client.post("/api/update/install").status_code == 400          # 源码方式运行：不自动安装
+
+        (tmp_path / "cache" / "AIMind-99.0.0-android-arm64.apk").unlink()
+        publish("0" * 64)                                                     # 清单说的校验码和文件对不上
+        client.post("/api/update/check")
+        r = client.get("/api/update/file/android-arm64")
+        assert r.status_code == 400 and "校验" in r.json()["detail"]
+
+        (tmp_path / "latest.json.sig").write_bytes(base64.b64encode(b"\1" * 64))   # 签名是假的
+        assert "签名" in client.post("/api/update/check").json()["error"]
+    finally:
+        srv.shutdown()
+        client.post("/api/config", json={"update_manifest_url": ""})

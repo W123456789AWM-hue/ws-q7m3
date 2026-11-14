@@ -4,8 +4,9 @@ import {$, $$, actions, esc, icon, onChange, onInput} from '../dom.js';
 import {api, getJSON, postJSON} from '../api.js';
 import {replay, segmented, settled, swap} from '../anim.js';
 import {layerOpen, openLayer, toast} from '../layers.js';
-import {state} from '../state.js';
+import {on, state} from '../state.js';
 import {loadUsage, usageHtml} from '../usage.js';
+import {updateHtml} from '../update.js';
 import {ALL, CATEGORIES} from './schema.js';
 
 let cfg = {}, mics = [], model = {}, current = 'general';
@@ -43,6 +44,7 @@ function control(f) {
 }
 
 function rowHtml(f) {
+  if (f.type === 'update') return `<div class="group" id="row_update" data-row="update">${updateHtml()}</div>`;
   if (f.type === 'usage') return `<div class="row stack" id="row_usage" data-row="usage" style="padding:0">${usageHtml()}</div>`;
   if (f.type === 'preview' && !state.app?.desktop) return '';
   let desc = f.desc || '';
@@ -57,10 +59,14 @@ function rowHtml(f) {
 function groupHtml(g) {
   const main = g.items.filter(f => !f.adv), adv = g.items.filter(f => f.adv);
   const gone = g.when && !g.when(cfg) ? ' style="display:none"' : '';
-  const rows = main.map(rowHtml).join('');
+  // 用量、软件更新这种整块内容自己成块；普通设置项放在分组列表里
+  const special = main.filter(f => f.type === 'usage' || f.type === 'update');
+  const normal = main.filter(f => !special.includes(f));
+  const rows = special.map(rowHtml).join('')
+    + (normal.length ? `<div class="group"${special.length ? ' style="margin-top:8px"' : ''}>${normal.map(rowHtml).join('')}</div>` : '');
   return `<section data-group="${esc(g.title)}"${gone}>
     <div class="group-title">${esc(g.title)}${g.note ? ` <span class="hint">· ${esc(g.note)}</span>` : ''}</div>
-    ${g.items[0]?.type === 'usage' ? rows : `<div class="group">${rows}</div>`}
+    ${rows}
     ${adv.length ? `<div class="adv"><button data-action="toggleAdv">高级</button>
       <div class="adv-body"><div><div class="group" style="margin-top:6px">${adv.map(rowHtml).join('')}</div></div></div></div>` : ''}
   </section>`;
@@ -182,7 +188,8 @@ export async function openSettings(focus) {
   // 只等设置本身（很快）；麦克风列表、模型状态、用量在后台取，取到了再刷新当前页（打开不卡顿）
   const [c, app] = await Promise.all([getJSON('/api/config'), state.app || getJSON('/api/app_info').catch(() => ({}))]);
   cfg = c; state.app = app;
-  if (focus === 'usage') current = 'usage';
+  const target = focus && ALL.find(x => x.k === focus);   // 从别处点进来（比如顶栏“新版本”）：直接定位到那一项
+  if (target) current = target.cat.id;
   $('setSearch').value = ''; $('setResults').hidden = true;
   renderCats(); renderPane();
   const refresh = ids => { if (ids.includes(current)) renderPane(); };
@@ -191,6 +198,7 @@ export async function openSettings(focus) {
   loadUsage().then(() => refresh(['usage']));
   await openLayer('settingsSheet');
   $$('#setBody .segmented').forEach(segmented);   // 弹窗出现后再算滑块位置
+  if (target && target.k !== 'usage') gotoField(target.k);
 }
 
 export function initSettings() {
@@ -232,4 +240,5 @@ export function initSettings() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && layerOpen('settingsSheet')) { e.preventDefault(); $('setSearch').focus(); }
   });
   window.addEventListener('resize', () => $$('.segmented').forEach(segmented));
+  on('update-changed', () => { const box = $('row_update'); if (box) box.innerHTML = updateHtml(); });
 }

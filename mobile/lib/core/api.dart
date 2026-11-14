@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import 'endpoints.dart';
 import 'settings.dart';
 
@@ -84,6 +86,49 @@ class ServerApi {
       if (period == 'day') return make ? makeDaily(key) : daily(key);
       throw ApiException('电脑上的程序版本太旧，不支持月复盘 / 年复盘，请更新电脑端', status: 404);
     }
+  }
+
+  /// 在线更新：问电脑有没有新版本（电脑替手机去发布服务器查、并验证签名）
+  Future<Map<String, dynamic>> updateInfo(String platform, String abi) async => Map<String, dynamic>.from(
+      await call('/api/update/mobile', query: {'platform': platform, 'abi': abi},
+          timeout: const Duration(seconds: 45)) as Map);
+
+  /// 从电脑下载新版安装包（电脑已经校验过；这里再核对一次大小和 sha256）
+  Future<File> downloadUpdate(String key, File dst, int size, String sha256hex,
+      void Function(int got) onProgress) {
+    return endpoints.run((base) async {
+      final b = Uri.parse(base);
+      final uri = b.replace(path: '${b.path.replaceAll(RegExp(r'/+$'), '')}/api/update/file/$key');
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+      try {
+        final req = await client.getUrl(uri);
+        req.headers.set('X-Token', s.token);
+        final resp = await req.close().timeout(const Duration(minutes: 5));
+        if (resp.statusCode != 200) {
+          final text = await resp.transform(utf8.decoder).join();
+          String detail = 'HTTP ${resp.statusCode}';
+          try { detail = '${(jsonDecode(text) as Map)['detail'] ?? detail}'; } catch (_) {}
+          throw ApiException(detail, status: resp.statusCode);
+        }
+        await dst.parent.create(recursive: true);
+        final sink = dst.openWrite();
+        var got = 0;
+        await for (final chunk in resp.timeout(const Duration(seconds: 60))) {
+          sink.add(chunk);
+          got += chunk.length;
+          onProgress(got);
+        }
+        await sink.close();
+        final digest = await sha256.bind(dst.openRead()).first;
+        if (got != size || digest.toString() != sha256hex) {
+          await dst.delete().catchError((_) => dst);
+          throw ApiException('下载的安装包校验不通过，已删除，请重试');
+        }
+        return dst;
+      } finally {
+        client.close(force: true);
+      }
+    });
   }
 
   Future<Map<String, dynamic>> getConfig() async =>

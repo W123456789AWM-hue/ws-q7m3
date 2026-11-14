@@ -12,7 +12,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import config as config_mod
-from . import hub, routes_core, routes_devices, routes_eval
+from .. import updater
+from . import hub, routes_core, routes_devices, routes_eval, routes_update
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOCAL = ("127.0.0.1", "::1", "localhost", "testclient")
@@ -21,12 +22,15 @@ LOCAL = ("127.0.0.1", "::1", "localhost", "testclient")
 @asynccontextmanager
 async def lifespan(_app):
     hub.loop = asyncio.get_running_loop()
+    updater.start_auto_check(hub.emit)     # 打包好的程序：后台检查新版本
     yield
 
 
 app = FastAPI(title="AI 录音思考助手", lifespan=lifespan)
-for r in (routes_core, routes_devices, routes_eval):
+for r in (routes_core, routes_devices, routes_eval, routes_update):
     app.include_router(r.router)
+
+
 class _Static(StaticFiles):
     """界面文件每次都和服务端核对一下（有 ETag，没改就是 304，很快）：升级后不会用到旧的缓存脚本"""
 

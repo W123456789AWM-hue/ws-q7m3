@@ -44,7 +44,7 @@
 .row.appear{animation:swapIn var(--t) var(--ease-out)}
 
 /* 搜索命中：高亮 + 闪烁三下 */
-.row.flash{animation:flash 1.5s var(--ease) 1}
+.row.flash,.group.flash{animation:flash 1.5s var(--ease) 1}
 @keyframes flash{
   0%,40%,80%{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
   20%,60%{background:transparent;box-shadow:inset 0 0 0 1.5px transparent}

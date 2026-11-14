@@ -213,6 +213,8 @@ def register_preview(webview) -> None:
         box["w"] = splash_window(webview, close, speed)
 
     hub.desktop_hooks["splash_preview"] = preview
+    # 在线更新：安装程序已经启动，程序自己退出（安装程序会等它退出再换文件）
+    hub.desktop_hooks["quit"] = lambda: threading.Timer(0.8, os._exit, (0,)).start()
 
 
 def open_window() -> bool:

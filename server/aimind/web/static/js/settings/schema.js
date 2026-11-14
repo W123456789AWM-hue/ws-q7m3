@@ -2,7 +2,7 @@
 //
 // 每一项：{k: 键, label: 名字, desc: 一句说明, type, options, when(cfg): 什么时候显示, adv: 收在「高级」里, kw: 额外的搜索词}
 // type：select / seg（分段按钮）/ bool（开关）/ text / password / number / time / textarea / mic（麦克风列表）
-//       test（测试按钮）/ preview（预览启动动画）/ usage（用量面板）/ theme（外观，只存在本机浏览器里）
+//       test（测试按钮）/ preview（预览启动动画）/ usage（用量面板）/ update（软件更新）/ theme（外观，只存在本机浏览器里）
 
 const audioMode = c => (c.review_input || 'audio') === 'audio';
 const textMode = c => c.review_input === 'text';
@@ -11,6 +11,11 @@ const realtime = c => c.review_mode === 'realtime';
 
 export const CATEGORIES = [
   {id: 'general', name: '通用', icon: 'user', color: '#8e8e93', groups: [
+    {title: '软件更新', items: [
+      {k: 'update', label: '软件更新', type: 'update', kw: '版本 升级 新版本 在线更新 下载'},
+      {k: 'update_auto_check', label: '自动检查新版本', desc: '启动时和每 6 小时检查一次；有新版本时顶栏会提示，不会自动安装', type: 'bool', kw: '升级 版本'},
+      {k: 'update_mirror', label: '下载镜像', desc: '连不上 GitHub 时填，比如 https://ghproxy.net/（会加在下载地址前面）', type: 'text', adv: true, kw: '代理 加速 github'},
+    ]},
     {title: '外观', items: [
       {k: 'theme', label: '外观', desc: '跟随系统的深色 / 浅色，或者固定一种', type: 'theme', kw: '主题 深色 浅色 暗色 夜间 dark light'},
     ]},

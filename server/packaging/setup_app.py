@@ -21,9 +21,12 @@ import winreg
 import zipfile
 from pathlib import Path
 
+if not getattr(sys, "frozen", False):          # 直接用 python 运行时，让它能找到 server/aimind
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from aimind.version import VERSION  # noqa: E402  （全工程的版本号只写在 aimind/version.py）
+
 APP_NAME = "AI 录音思考助手"
 EXE = "AIMind.exe"
-VERSION = "0.9.0"
 PUBLISHER = "AI Mind"
 REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\AIMind"
 NO_WINDOW = 0x08000000
@@ -114,33 +117,54 @@ def install(target: Path, desktop: bool = True, startmenu: bool = True, autostar
     if not payload.exists():
         raise RuntimeError("安装包不完整（缺少 payload.zip），请重新下载安装程序")
 
-    progress(2, "正在关闭正在运行的旧版本…")
+    if target.exists() and any(target.iterdir()) and not (target / EXE).exists():
+        raise RuntimeError(f"「{target}」里已经有别的文件。为了不误删你的东西，请选一个空文件夹或新文件夹")
+
+    # 先解压到旁边的临时文件夹，全部成功后再整体换上去：中途失败旧版本完好无损
+    stage = target.with_name(target.name + ".new")
+    old = target.with_name(target.name + ".old")
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    try:
+        with zipfile.ZipFile(payload) as z:
+            items = [i for i in z.infolist() if not i.is_dir()]
+            total = sum(i.file_size for i in items) or 1
+            done = 0
+            for n, i in enumerate(items):
+                rel = Path(*Path(i.filename).parts[1:])        # 去掉压缩包里最外层的 AIMind/
+                dst = stage / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(i) as src, open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                done += i.file_size
+                if n % 20 == 0:
+                    progress(2 + int(84 * done / total), f"正在复制程序文件… {rel.name}")
+    except Exception:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+
+    progress(88, "正在关闭正在运行的旧版本…")
     stop_running()
-
-    if target.exists() and any(target.iterdir()):
-        if not (target / EXE).exists():
-            raise RuntimeError(f"「{target}」里已经有别的文件。为了不误删你的东西，请选一个空文件夹或新文件夹")
-        progress(5, "正在移除旧版本的程序文件（数据不受影响）…")
-        for p in target.iterdir():
+    shutil.rmtree(old, ignore_errors=True)
+    if target.exists():
+        for attempt in range(10):                       # 刚退出的程序可能还占着文件，等一下再试
             try:
-                shutil.rmtree(p) if p.is_dir() else p.unlink()
+                target.rename(old)
+                break
             except OSError as e:
-                raise RuntimeError(f"旧版本的文件删不掉（{p.name}）：{e}。请先关闭程序再重试") from e
-    target.mkdir(parents=True, exist_ok=True)
-
-    with zipfile.ZipFile(payload) as z:
-        items = [i for i in z.infolist() if not i.is_dir()]
-        total = sum(i.file_size for i in items) or 1
-        done = 0
-        for n, i in enumerate(items):
-            rel = Path(*Path(i.filename).parts[1:])        # 去掉压缩包里最外层的 AIMind/
-            dst = target / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(i) as src, open(dst, "wb") as out:
-                shutil.copyfileobj(src, out, 1 << 20)
-            done += i.file_size
-            if n % 20 == 0:
-                progress(8 + int(84 * done / total), f"正在复制程序文件… {rel.name}")
+                if attempt == 9:
+                    shutil.rmtree(stage, ignore_errors=True)
+                    raise RuntimeError(f"旧版本的文件还在被占用（{e}）。请关闭程序后再试") from e
+                import time
+                time.sleep(0.5)
+    try:
+        stage.rename(target)
+    except OSError:
+        if old.exists() and not target.exists():
+            old.rename(target)                          # 换不上去：把旧版本放回原处
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    shutil.rmtree(old, ignore_errors=True)
 
     progress(93, "正在创建快捷方式…")
     exe = target / EXE
@@ -227,22 +251,64 @@ def gui() -> None:
     webview.start()
 
 
+def wait_pid(pid: int, timeout: float = 60) -> None:
+    """等旧版程序自己退出（在线更新时程序先启动安装程序、再退出自己）"""
+    import ctypes
+    import time
+    k32 = ctypes.windll.kernel32
+    h = k32.OpenProcess(0x00100000, False, pid)        # SYNCHRONIZE
+    if not h:
+        return                                          # 已经退出了
+    try:
+        k32.WaitForSingleObject(h, int(timeout * 1000))
+    finally:
+        k32.CloseHandle(h)
+    time.sleep(0.5)
+
+
+def _arg(args: list[str], name: str) -> str | None:
+    return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else None
+
+
 def main() -> None:
+    """命令行：
+      --silent [--dir D] [--no-shortcuts]       不弹界面安装（测试用）
+      --silent --upgrade [--wait-pid N] [--relaunch]
+                                                在线更新：等旧版退出 → 装到原来的位置（保留原来的快捷方式）→ 重新打开
+    """
     args = sys.argv[1:]
     if "--silent" in args:
-        target = Path(args[args.index("--dir") + 1]) if "--dir" in args else DEFAULT_DIR
+        upgrade = "--upgrade" in args
+        target = Path(_arg(args, "--dir") or (installed_dir() if upgrade else None) or DEFAULT_DIR)
         no_links = "--no-shortcuts" in args
         # 窗口程序没有控制台：进度写到 %TEMP%\AIMind-Setup.log
         log = open(Path(os.environ.get("TEMP", ".")) / "AIMind-Setup.log", "w", encoding="utf-8")
+        ok = False
         try:
-            install(target, desktop=not no_links, startmenu=not no_links,
-                    progress=lambda p, m: log.write(f"{p:3d}% {m}\n"))
+            if _arg(args, "--wait-pid"):
+                log.write("等旧版本退出…\n")
+                wait_pid(int(_arg(args, "--wait-pid")))
+            if upgrade:   # 只重建原来就有的快捷方式
+                desktop = (_shell_folder("Desktop") / f"{APP_NAME}.lnk").exists()
+                autostart = (_shell_folder("Startup") / f"{APP_NAME}.lnk").exists()
+                install(target, desktop=desktop and not no_links, startmenu=not no_links,
+                        autostart=autostart and not no_links, progress=lambda p, m: log.write(f"{p:3d}% {m}\n"))
+            else:
+                install(target, desktop=not no_links, startmenu=not no_links,
+                        progress=lambda p, m: log.write(f"{p:3d}% {m}\n"))
             log.write("OK\n")
+            ok = True
         except Exception as e:
             log.write(f"安装失败：{e}\n")
-            sys.exit(1)
+            if upgrade:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, f"更新没有完成：{e}\n\n旧版本不受影响，可以稍后再试。", APP_NAME, 0x30)
         finally:
             log.close()
+            if "--relaunch" in args and (target / EXE).exists():   # 装好了打开新版；失败了也把程序打开
+                subprocess.Popen([str(target / EXE)], cwd=str(target), close_fds=True)
+        if not ok:
+            sys.exit(1)
         return
     try:
         gui()

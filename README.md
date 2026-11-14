@@ -1,6 +1,6 @@
 # AI 录音思考助手
 
-- `安装包/`：已经打好的安装包。电脑端双击 `AIMind-Setup-0.9.0.exe` 安装；安卓手机装 `AIMind-Android-arm64.apk`。
+- `安装包/`：已经打好的安装包。电脑端双击 `AIMind-Setup-<版本>.exe` 安装；安卓手机装 `AIMind-Android-arm64.apk`。
 - `server/`：电脑端（Windows / Mac）。可以打包成独立程序（不用装 Python）：Windows 双击 `server/packaging/build_windows.bat`，
   Mac 运行 `bash server/packaging/build_mac.sh`。也可以继续双击 `start.bat` / `start.command` 用源码启动。说明见 `server/README.md`。
 - `mobile/`：手机 App（安卓 / iPhone）。打包方法见 `mobile/README.md`。

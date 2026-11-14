@@ -52,5 +52,5 @@ try {
   & "$venv\Scripts\pyinstaller.exe" --noconfirm --log-level WARN --distpath $dist --workpath "$work\setup_work" packaging\setup.spec
   if ($LASTEXITCODE -ne 0) { throw '生成安装程序失败' }
 } finally { Pop-Location }
-Write-Host "安装程序：$dist\AIMind-Setup-0.9.0.exe" -ForegroundColor Green
+Write-Host "安装程序：$((Get-ChildItem $dist -Filter 'AIMind-Setup-*.exe' | Sort-Object LastWriteTime | Select-Object -Last 1).FullName)" -ForegroundColor Green
 if (-not $env:AIMIND_NO_EXPLORER) { Start-Process explorer.exe $dist }

@@ -62,6 +62,10 @@ DEFAULTS: dict = {
     "server_token": "",               # 手机连接口令（首次启动自动生成）
     "server_port": 8765,              # 端口；8765 被别的程序占用时会自动换一个并记在这里
     "phone_idle_stop_min": 30,        # 所有设备都多久没传录音，就自动收尾这一场
+    # ---- 在线更新 ----
+    "update_auto_check": True,        # 自动检查新版本（启动时 + 每 6 小时）
+    "update_mirror": "",              # 下载镜像前缀，比如 https://ghproxy.net/（连不上 GitHub 时用）
+    "update_manifest_url": "",        # 留空 = 官方发布地址；测试 / 自建发布时才填
     # ---- 桌面程序 ----
     "splash_enabled": True,           # 启动时播放启动动画
     "splash_speed": 1.0,              # 启动动画速度：0.5 = 慢一倍，2 = 快一倍

@@ -28,6 +28,21 @@ class AndroidBridge {
     }
   }
 
+  /// 手机 CPU 架构（选安装包用）：arm64-v8a / armeabi-v7a
+  static Future<String> abi() async {
+    if (!Platform.isAndroid) return '';
+    try {
+      return await _ch.invokeMethod<String>('abi') ?? 'arm64-v8a';
+    } catch (_) {
+      return 'arm64-v8a';
+    }
+  }
+
+  /// 打开系统的安装界面装 APK。返回 ok / need_permission（需要先允许“安装未知应用”，已经跳到设置页）
+  static Future<String> installApk(String path) async {
+    return await _ch.invokeMethod<String>('installApk', {'path': path}) ?? 'ok';
+  }
+
   static Future<void> requestIgnoreBatteryOptimizations() async {
     if (!Platform.isAndroid) return;
     try {

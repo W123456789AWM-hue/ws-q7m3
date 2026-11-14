@@ -89,6 +89,16 @@ details .body{overflow:hidden}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--label-3);flex:none}
 .dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
 
+/* ---------- 在线更新 ---------- */
+.upd-badge{display:inline-flex;align-items:center;gap:7px;margin-right:6px;padding:4px 11px;border-radius:99px;font-size:12px;
+  background:var(--accent-soft);color:var(--accent);animation:swapIn var(--t) var(--ease-out)}
+.upd-badge i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1.8s var(--ease) infinite}
+.upd-badge:hover{background:var(--accent);color:#fff}
+.upd-new{color:var(--accent);font-weight:600}
+.upd-bar{height:5px;border-radius:5px;background:var(--fill);overflow:hidden;margin:6px 0 3px;width:min(260px,100%)}
+.upd-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--tech),var(--accent));transition:width .3s var(--ease)}
+.upd-notes{font-size:13px;color:var(--label-2);max-height:220px;overflow-y:auto}
+
 /* ---------- 统计、表格 ---------- */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:4px 0 10px}
 .stat{background:var(--fill-2);border-radius:var(--r);padding:11px 13px}

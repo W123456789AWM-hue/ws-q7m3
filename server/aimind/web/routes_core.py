@@ -53,7 +53,9 @@ def get_usage(date: str = ""):
 @router.get("/app_info")
 def app_info():
     """界面用来判断：是不是在桌面程序里（能不能预览启动动画）"""
-    return {"app": "aimind", "desktop": bool(os.environ.get("AIMIND_DESKTOP")), "platform": sys.platform,
+    from ..version import VERSION
+    return {"app": "aimind", "version": VERSION, "desktop": bool(os.environ.get("AIMIND_DESKTOP")),
+            "platform": sys.platform, "frozen": bool(getattr(sys, "frozen", False)),
             "port": int(os.environ.get("AIMIND_PORT") or 8765)}
 
 

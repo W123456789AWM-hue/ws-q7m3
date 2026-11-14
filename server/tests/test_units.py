@@ -132,3 +132,24 @@ def test_port_taken_by_other_app_moves_to_free_port():
     finally:
         srv.shutdown()
         config.save({"server_port": old or 8765})
+
+
+def test_update_manifest_signature_and_versions(monkeypatch):
+    import base64
+    import json
+
+    import pytest
+
+    from aimind import ed25519, updater
+    from aimind.version import newer, parse
+    assert parse("v0.9.10") == (0, 9, 10) and newer("0.10.0", "0.9.9") and not newer("0.9.2", "0.9.2")
+    seed = bytes(range(32))
+    monkeypatch.setattr(updater, "PUBLIC_KEY", base64.b64encode(ed25519.public_key(seed)).decode())
+    asset = {"name": "a.exe", "url": "u", "size": 1, "sha256": "x"}
+    raw = json.dumps({"version": "9.9.9", "assets": {"windows": asset}}).encode()
+    sig = base64.b64encode(ed25519.sign(seed, raw))
+    assert updater.verify_manifest(raw, sig)["version"] == "9.9.9"
+    with pytest.raises(RuntimeError, match="签名"):
+        updater.verify_manifest(raw.replace(b"9.9.9", b"9.9.8"), sig)        # 清单被改过
+    with pytest.raises(RuntimeError, match="签名"):
+        updater.verify_manifest(raw, base64.b64encode(b"\0" * 64))          # 签名是假的

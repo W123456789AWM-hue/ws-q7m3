@@ -19,7 +19,7 @@
 
 不用装 Python，像普通软件一样有自己的窗口，关掉窗口就退出。
 
-- **Windows**：双击安装程序 `AIMind-Setup-0.9.0.exe` → 安装，之后从桌面或开始菜单打开。
+- **Windows**：双击安装程序 `AIMind-Setup-<版本>.exe` → 安装，之后从桌面或开始菜单打开。
   装在 `%LOCALAPPDATA%\Programs\AIMind`（不要管理员权限，可选开机自启）；卸载在「设置 → 应用」。覆盖安装就是升级。
   第一次启动时 Windows 防火墙弹窗要点「允许访问」，手机才能连进来。
   也有解压即用的 `AIMind-Windows.zip`：**一定要先解压到短路径（如 `D:\AIMind`）再运行**，
@@ -33,7 +33,7 @@
   在「设置 → 启动动画」里可以关掉或调速度（0.5×–3×），Windows 上还能直接预览。动画素材用 `packaging/make_splash.py` 从 `packaging/splash_source.mp4` 生成。
 - 独立程序不带“本机识别成文字”（SenseVoice / Whisper，体积太大）；要用这个功能请用下面的源码方式启动。
 
-**自己打包**：Windows 双击 `packaging/build_windows.bat`（生成 `dist/AIMind-Setup-0.9.0.exe` 安装程序和 `dist/AIMind-Windows.zip` 绿色版）；
+**自己打包**：Windows 双击 `packaging/build_windows.bat`（生成 `dist/AIMind-Setup-<版本>.exe` 安装程序和 `dist/AIMind-Windows.zip` 绿色版）；
 Mac 运行 `bash packaging/build_mac.sh`（生成 `dist/AIMind-Mac.dmg`）。没有 Mac 的话用仓库里的 GitHub Actions「Build all」云端打包。
 
 ## 用源码启动
@@ -56,6 +56,10 @@ Mac 运行 `bash packaging/build_mac.sh`（生成 `dist/AIMind-Mac.dmg`）。没
 
 **费用（估算）**：每小时说话约 1.2 美元（只发有人说话的部分）。几台设备在同一个房间同时录，
 同一段话会被听好几遍，费用也会翻倍——同一个房间放一台就够了。
+
+**在线更新**：有新版本时右上角会出现「新版本 x.x.x」，点开看更新内容，点「下载并安装」，约 10 秒后自动重新打开。
+录音中不会更新；录音、复盘、设置都不受影响。设置 → 通用 → 软件更新里可以关掉自动检查、填下载镜像。
+手机 App 在「设置 → 软件更新」里检查（通过电脑下载）：安卓点一下就能装；iPhone 需要用电脑重新签名安装。
 
 **省 token**：右下角状态栏显示今天的 AI 用量（点开看明细和省钱建议）。程序已经自动做了这些，不影响复盘质量：
 发给 AI 前去掉每句话前后多余的静音；固定不变的说明放在最前面，命中 OpenAI 的提示缓存（这部分按半价或更低计费）；

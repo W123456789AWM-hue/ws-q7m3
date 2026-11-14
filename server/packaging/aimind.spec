@@ -9,7 +9,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 SERVER = Path(SPECPATH).parent
 ROOT = SERVER.parent
 ICON_PNG = ROOT / "mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png"
-VERSION = "0.9.0"
+VERSION = {}  # 从 aimind/version.py 读（全工程只写一处）
+exec((SERVER / "aimind" / "version.py").read_text(encoding="utf-8-sig"), VERSION)
+VERSION = VERSION["VERSION"]
 
 hidden = (collect_submodules("aimind") + collect_submodules("uvicorn") + collect_submodules("webview", filter=lambda n: ".android" not in n)
           + ["run", "splash_win", "PIL.WebPImagePlugin"])

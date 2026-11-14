@@ -11,6 +11,8 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import androidx.core.content.FileProvider
+import java.io.File
 
 class MainActivity : FlutterActivity() {
 
@@ -61,6 +63,27 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("BATTERY", e.message, null)
+                        }
+                    }
+                    "abi" -> result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a")
+                    "installApk" -> {
+                        // 在线更新：把下载好的 APK 交给系统安装界面（用户点“安装”）
+                        try {
+                            if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+                                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:$packageName")))
+                                result.success("need_permission")
+                            } else {
+                                val file = File(call.argument<String>("path")!!)
+                                val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                                startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, "application/vnd.android.package-archive")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                                result.success("ok")
+                            }
+                        } catch (e: Exception) {
+                            result.error("INSTALL", e.message, null)
                         }
                     }
                     else -> result.notImplemented()

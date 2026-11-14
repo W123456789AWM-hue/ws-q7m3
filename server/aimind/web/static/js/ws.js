@@ -14,6 +14,7 @@ function handle(m) {
     case 'nas': $('nasInfo').textContent = m.msg; return;
     case 'eval': return emit('eval', m);
     case 'report': return emit('report', m);
+    case 'update': return emit('update', m);
     case 'next_review': state.nextReview = m.data; return renderNext();
     case 'state':
       Object.assign(state, {recording: m.recording, nextReview: m.next_review, micOn: !!m.mic_on, devices: m.devices || []});

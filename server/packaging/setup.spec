@@ -10,10 +10,14 @@ HERE = Path(SPECPATH)
 ROOT = HERE.parent.parent
 ICON_PNG = ROOT / "mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png"
 PAYLOAD = os.environ["AIMIND_PAYLOAD"]
-VERSION = "0.9.0"
+SERVER = HERE.parent
+VERSION = {}  # 从 aimind/version.py 读（全工程只写一处）
+exec((SERVER / "aimind" / "version.py").read_text(encoding="utf-8-sig"), VERSION)
+VERSION = VERSION["VERSION"]
 
 a = Analysis(
     [str(HERE / "setup_app.py")],
+    pathex=[str(SERVER)],
     datas=[(PAYLOAD, "."), (str(HERE / "setup_ui.html"), "."), (str(HERE / "setup_logo.png"), ".")]
           + collect_data_files("webview"),
     hiddenimports=collect_submodules("webview", filter=lambda n: ".android" not in n),
