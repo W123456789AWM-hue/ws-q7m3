@@ -39,7 +39,10 @@ if FROZEN and not (os.environ.get("AIMIND_DATA") or os.environ.get("AI_MIND_DATA
 if os.environ.get("AI_MIND_DATA") and not os.environ.get("AIMIND_DATA"):
     os.environ["AIMIND_DATA"] = os.environ["AI_MIND_DATA"]
 
-PORT = int(os.environ.get("AIMIND_PORT") or os.environ.get("AI_MIND_PORT") or "8765")
+from aimind.portpick import choose_port, is_ours  # noqa: E402  （要在设好数据目录之后导入）
+
+# 8765 被别的程序（比如 Loon 的配置服务）占着时，自动换一个端口并记住
+PORT, PORT_MOVED, PORT_WANTED = choose_port(os.environ.get("AIMIND_PORT") or os.environ.get("AI_MIND_PORT"))
 os.environ["AIMIND_PORT"] = str(PORT)
 HOST = os.environ.get("AIMIND_HOST") or os.environ.get("AI_MIND_HOST") or "0.0.0.0"
 URL = f"http://127.0.0.1:{PORT}"
@@ -74,6 +77,27 @@ def friendly_error(e: BaseException | None = None) -> str:
     if e is not None:
         return f"启动失败：{text}\n\n详细信息在 {log_file()}，可以发给 Claude。"
     return f"启动失败：端口 {PORT} 打不开（可能被别的程序占用了）。\n\n详细信息在 {log_file()}"
+
+
+def notify_port_moved() -> None:
+    """端口换了：告诉用户手机 App 里的地址要跟着改（只在换端口的那一次提示）"""
+    if not wait_ready():
+        return
+    msg = (f"这台电脑的 {PORT_WANTED} 端口已经被别的程序占用了（比如 Loon / Surge 的配置服务），"
+           f"AI 录音思考助手已自动改用 {PORT} 端口，以后会一直用它。\n\n"
+           f"手机 App 里的「电脑地址」要把端口改成 :{PORT}。"
+           "完整地址在程序右上角「设备连接」里能看到。")
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, msg, APP_NAME, 0x40 | 0x40000)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["osascript", "-e", f'display dialog "{msg}" with title "{APP_NAME}" buttons {{"好"}}'],
+                           check=False)
+    except Exception:
+        pass
+    print(msg, file=sys.stderr)
 
 
 def running_from_archive() -> bool:
@@ -263,9 +287,11 @@ def main() -> None:
                    "或者先把整个 AIMind 文件夹解压出来（比如解压到 D:\\AIMind），再双击里面的 AIMind.exe。")
         sys.exit(1)
 
-    already = port_busy()
+    already = port_busy() and is_ours(PORT)
     if not already:
         start_server()   # 后台启动服务，启动动画播放的同时就准备好了
+    if PORT_MOVED:
+        threading.Thread(target=notify_port_moved, daemon=True).start()
 
     if open_window():
         os._exit(0)   # 关掉窗口 = 退出程序

@@ -100,3 +100,35 @@ def test_due_reports_timing(monkeypatch):
     assert ("year", "2026") in daily.due_reports(nxt, datetime(2027, 1, 1, 23, 40))
     off = {**cfg, "monthly_review": "off", "yearly_review": "off", "daily_review_time": ""}
     assert daily.due_reports(off, datetime(2026, 12, 31, 23, 59)) == []
+
+
+def test_port_taken_by_other_app_moves_to_free_port():
+    """8765 被别的程序（比如 Loon 配置服务）占着：不能当成自己，要换端口并记住"""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from aimind import config, portpick
+
+    class Other(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<html>Loon config</html>")
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Other)
+    taken = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    old = config.load().get("server_port")
+    try:
+        config.save({"server_port": taken})
+        assert portpick.port_busy(taken) and not portpick.is_ours(taken)
+        port, moved, wanted = portpick.choose_port()
+        assert moved and wanted == taken and port != taken and not portpick.port_busy(port)
+        assert config.load()["server_port"] == port          # 记住了，下次直接用
+        assert portpick.choose_port("9999") == (9999, False, 9999)   # 环境变量指定的照用
+    finally:
+        srv.shutdown()
+        config.save({"server_port": old or 8765})

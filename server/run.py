@@ -16,8 +16,13 @@ def env(name: str, default: str = "") -> str:
     return os.environ.get("AIMIND_" + name) or os.environ.get("AI_MIND_" + name) or default
 
 
-PORT = int(env("PORT", "8765"))
-os.environ.setdefault("AIMIND_PORT", str(PORT))
+if env("DATA"):
+    os.environ.setdefault("AIMIND_DATA", env("DATA"))
+from aimind.portpick import choose_port  # noqa: E402  （要在设好数据目录之后导入）
+
+# 8765 被别的程序占着时自动换一个端口（会记在设置里，以后一直用它）
+PORT, PORT_MOVED, PORT_WANTED = choose_port(env("PORT"))
+os.environ["AIMIND_PORT"] = str(PORT)
 URL = f"http://127.0.0.1:{PORT}"
 
 
@@ -44,6 +49,8 @@ def open_window():
 if __name__ == "__main__":
     import uvicorn
     print(f"AI 录音思考助手已启动：{URL}")
+    if PORT_MOVED:
+        print(f"注意：{PORT_WANTED} 端口被别的程序占用，已改用 {PORT}。手机 App 里的电脑地址端口要改成 :{PORT}")
     print("关闭这个黑色窗口即可退出程序。")
     threading.Thread(target=open_window, daemon=True).start()
     # 监听局域网，手机才能连进来；局域网里的访问都要带口令（见界面上的「设备连接」）

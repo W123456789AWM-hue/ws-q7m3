@@ -60,6 +60,7 @@ DEFAULTS: dict = {
     "nas_dir": "",                    # NAS 共享目录，例如 \\\\192.168.1.10\\recordings 或 Z:\\recordings
     "save_audio": True,
     "server_token": "",               # 手机连接口令（首次启动自动生成）
+    "server_port": 8765,              # 端口；8765 被别的程序占用时会自动换一个并记在这里
     "phone_idle_stop_min": 30,        # 所有设备都多久没传录音，就自动收尾这一场
     # ---- 桌面程序 ----
     "splash_enabled": True,           # 启动时播放启动动画
