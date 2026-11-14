@@ -14,6 +14,7 @@ dependencies:
   path_provider: ^2.1.5
   connectivity_plus: ^7.0.0         # “仅 WiFi 上传”开关
   crypto: ^3.0.0                    # 在线更新：核对安装包的 sha256
+  image_picker: ^1.1.2              # 反馈附图（从相册选截图）
 
 # 录音插件的各平台实现固定在实测能编译的版本（record_android 2.3.0 编译不过）
 dependency_overrides:

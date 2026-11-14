@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
 import 'update_section.dart' show appVersion;
@@ -16,12 +18,14 @@ class FeedbackSection extends StatefulWidget {
 
 class _FeedbackSectionState extends State<FeedbackSection> {
   static const _kinds = {'bug': '问题', 'idea': '建议', 'other': '其他'};
+  static const _maxImages = 3;
   final _text = TextEditingController();
   final _contact = TextEditingController();
   String _kind = 'bug';
   bool _diag = true, _sending = false;
   String _msg = '';
   List<Map<String, dynamic>> _items = [];
+  final List<XFile> _images = []; // 附图（选填）
 
   @override
   void initState() {
@@ -43,6 +47,23 @@ class _FeedbackSectionState extends State<FeedbackSection> {
     } catch (_) {/* 没连上电脑 / 电脑端是旧版 */}
   }
 
+  /// 从相册选截图：系统自带的图片选择器，不用申请相册权限；先缩到长边 1600 再发
+  Future<void> _pick() async {
+    final room = _maxImages - _images.length;
+    if (room <= 0) return;
+    try {
+      final picked = await ImagePicker()
+          .pickMultiImage(maxWidth: 1600, maxHeight: 1600, imageQuality: 85, limit: room > 1 ? room : null);
+      if (picked.isEmpty || !mounted) return;
+      setState(() {
+        _images.addAll(picked.take(room));
+        _msg = picked.length > room ? '附图最多 $_maxImages 张，多的没加上' : '';
+      });
+    } catch (e) {
+      if (mounted) setState(() => _msg = '没能打开相册：$e');
+    }
+  }
+
   Future<void> _send() async {
     final text = _text.text.trim();
     if (text.isEmpty) {
@@ -55,6 +76,7 @@ class _FeedbackSectionState extends State<FeedbackSection> {
     });
     final s = widget.app.settings;
     try {
+      final images = [for (final f in _images) base64Encode(await f.readAsBytes())];
       final r = await widget.app.api.sendFeedback({
         'kind': _kind,
         'text': text,
@@ -62,9 +84,11 @@ class _FeedbackSectionState extends State<FeedbackSection> {
         'include_diag': _diag,
         'source': s.deviceName,
         'client': 'App $appVersion · ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+        if (images.isNotEmpty) 'images': images,
       });
       _text.clear();
       setState(() {
+        _images.clear();
         _msg = r['status'] == 'sent' ? '已送达，谢谢你的反馈！' : '电脑暂时没发出去，已存好，联网后会自动重发';
         _items = [r, ..._items.where((x) => x['id'] != r['id'])];
       });
@@ -105,6 +129,35 @@ class _FeedbackSectionState extends State<FeedbackSection> {
           decoration: const InputDecoration(
               labelText: '想说的', hintText: '怎么操作的、看到了什么，或者希望加什么功能', border: OutlineInputBorder()),
         ),
+        Text('附图（选填）', style: t.textTheme.bodyMedium),
+        Text('截图能让开发者更快看懂问题，最多 $_maxImages 张', style: TextStyle(color: t.colorScheme.outline, fontSize: 12)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (var i = 0; i < _images.length; i++)
+            Stack(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(File(_images[i].path), width: 76, height: 76, fit: BoxFit.cover),
+              ),
+              Positioned(
+                top: 2,
+                right: 2,
+                child: InkWell(
+                  onTap: () => setState(() => _images.removeAt(i)),
+                  child: const CircleAvatar(
+                      radius: 11, backgroundColor: Colors.black54, child: Icon(Icons.close, size: 14, color: Colors.white)),
+                ),
+              ),
+            ]),
+          if (_images.length < _maxImages)
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(76, 76)),
+              onPressed: _sending ? null : _pick,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('添加图片'),
+            ),
+        ]),
+        const SizedBox(height: 16),
         TextField(
           controller: _contact,
           maxLength: 100,
@@ -128,7 +181,8 @@ class _FeedbackSectionState extends State<FeedbackSection> {
               dense: true,
               title: Text('${x['text']}', maxLines: 2, overflow: TextOverflow.ellipsis),
               subtitle: Text('${_kinds[x['kind']] ?? '其他'} · ${when(x['time'] as num)}'
-                  '${'${x['source'] ?? ''}'.isNotEmpty ? ' · ${x['source']}' : ''}'),
+                  '${'${x['source'] ?? ''}'.isNotEmpty ? ' · ${x['source']}' : ''}'
+                  '${(x['images'] as List?)?.isNotEmpty == true ? ' · 附图 ${(x['images'] as List).length} 张' : ''}'),
               trailing: Text(x['status'] == 'sent' ? '已送达' : '等待发送',
                   style: TextStyle(color: x['status'] == 'sent' ? Colors.green : Colors.orange)),
             ),

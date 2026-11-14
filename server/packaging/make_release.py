@@ -8,7 +8,8 @@
   AIMind-Setup-<版本>.exe                 windows
   AIMind-<版本>-mac-arm64.dmg / -mac-intel.dmg
   AIMind-<版本>-android-arm64.apk / -android-armv7.apk
-  AIMind-<版本>-ios-unsigned.ipa
+  AIMind-<版本>-ios-unsigned.ipa         ios（未签名，用免费 Apple ID 自签）
+  AIMind-<版本>-ios.ipa                  ios-signed（云端用付费开发者证书签好的，配了才有）
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ PATTERNS = {
     "android-arm64": "AIMind-{v}-android-arm64.apk",
     "android-armv7": "AIMind-{v}-android-armv7.apk",
     "ios": "AIMind-{v}-ios-unsigned.ipa",
+    "ios-signed": "AIMind-{v}-ios.ipa",
 }
 
 

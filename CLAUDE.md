@@ -30,7 +30,8 @@ mobile/                 手机 App（Flutter）：只负责录音、上传、查
   lib/ui/               页面
   tool/core_check.dart  不用手机的联调：按手机方式上传真实录音给运行中的电脑端并检查结果
 scripts/package.sh      打包给用户的 zip
-.github/workflows/build-all.yml  云端打包四个平台（Windows exe、Mac dmg、安卓 APK、iPhone 未签名 IPA）
+.github/workflows/build-all.yml  云端打包四个平台（Windows exe、Mac dmg、安卓 APK、iPhone IPA）
+docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云端签名（mobile/scripts/sign_ios.sh，密钥 IOS_P12_BASE64 等）
 ```
 
 ## 版本与在线更新
@@ -52,6 +53,9 @@ scripts/package.sh      打包给用户的 zip
 - 机器人地址 / 签名密钥：GitHub 仓库密钥 `FEEDBACK_WEBHOOK` / `FEEDBACK_SECRET`，打包时 `aimind.spec` 写进程序；
   本机打包用 `%LOCALAPPDATA%\ai_mind_build\feedback_target.json`；测试用环境变量 `AIMIND_FEEDBACK_WEBHOOK` / `AIMIND_FEEDBACK_SECRET`。**不要提交进仓库。**
 - 发不出去存 `data/feedback/`，每 5 分钟重发。诊断信息经 `redact()` 抹掉密钥，不带录音和复盘内容。
+- 附图（选填，最多 3 张，界面先压到长边 1600）：自定义机器人不能传图，另用飞书「企业自建应用」（权限 `im:resource`，开启机器人能力）
+  上传拿 image_key 放进卡片；密钥 `FEEDBACK_APP_ID` / `FEEDBACK_APP_SECRET`（测试用 `AIMIND_FEEDBACK_APP_ID` / `_SECRET`）。
+  没配或卡片不收图时文字照发，卡片里注明，图片留在 `data/feedback/<编号>/`。
 
 ## 复盘层级
 

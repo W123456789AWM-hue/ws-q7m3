@@ -68,5 +68,17 @@
 .fb-st.pending{background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange)}
 .fb-text{white-space:pre-wrap;word-break:break-word;color:var(--label)!important}
 .fb-err{color:var(--orange)!important}
+.fb-opt{margin-left:4px;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:500;background:var(--fill-2);color:var(--label-2)}
+.fb-imgs{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row.stack .fb-imgs>*{flex:0 0 auto}
+.row.stack .fb-imgs>.fb-thumb{width:88px}
+.row.stack .fb-imgs>.fb-add{width:auto}
+.fb-thumb{position:relative;width:88px;height:88px;border-radius:10px;overflow:hidden;background:var(--fill-2)}
+.fb-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.fb-del{position:absolute;top:4px;right:4px;width:22px;height:22px;padding:0;border-radius:50%;border:0;
+  background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;cursor:pointer}
+.fb-del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2}
+.fb-add{height:88px;padding:0 16px;border-radius:10px;border:1.5px dashed var(--label-3,var(--label-2));background:transparent;color:var(--label-2);cursor:pointer}
+.fb-add:hover{color:var(--accent,var(--blue));border-color:currentColor}
 .fb-diag pre{margin:0;max-height:200px;overflow:auto;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:var(--label-2)}
 #fbText{width:100%}

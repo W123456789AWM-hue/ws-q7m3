@@ -117,9 +117,11 @@ class _UpdateSectionState extends State<UpdateSection> {
             FilledButton(onPressed: _progress != null ? null : _install, child: const Text('下载并安装')),
         ]),
         if (_available && Platform.isIOS)
-          const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('iPhone 版需要在电脑上用 Sideloadly 重新签名安装新版本（苹果不允许未上架的 App 自己更新）。')),
+          Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text((_info?['asset'] as Map?)?['key'] == 'ios-signed'
+                  ? '新版已经签好名：在电脑上用爱思助手或 Sideloadly 把 AIMind-…-ios.ipa 装到手机即可（苹果不允许未上架的 App 自己更新）。'
+                  : 'iPhone 版需要在电脑上用 Sideloadly 签名安装新版本（苹果不允许未上架的 App 自己更新）。')),
         if (_msg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg)),
       ]),
     );

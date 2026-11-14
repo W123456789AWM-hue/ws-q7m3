@@ -12,6 +12,7 @@ set_key () { # key type value
 
 set_key NSMicrophoneUsageDescription string "需要使用麦克风进行全天录音。语音在手机本地转成文字，文字用于 AI 复盘，录音保存到你的 NAS。"
 set_key NSLocalNetworkUsageDescription string "需要访问局域网内的 NAS 以保存录音和复盘结果。"
+set_key NSPhotoLibraryUsageDescription string "发反馈时可以从相册选截图作为附图（选填）。"
 set_key CFBundleDisplayName string "AI录音思考"
 
 # 后台录音

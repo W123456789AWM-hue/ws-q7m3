@@ -27,7 +27,11 @@ _fb = SERVER / "build" / "feedback_target.json"
 if _os.environ.get("FEEDBACK_WEBHOOK"):
     _fb.parent.mkdir(parents=True, exist_ok=True)
     _fb.write_text(_json.dumps({"webhook": _os.environ["FEEDBACK_WEBHOOK"].strip(),
-                                "secret": _os.environ.get("FEEDBACK_SECRET", "").strip()}), encoding="utf-8")
+                                "secret": _os.environ.get("FEEDBACK_SECRET", "").strip(),
+                                # 附图上传用的飞书自建应用（选填）
+                                "app_id": _os.environ.get("FEEDBACK_APP_ID", "").strip(),
+                                "app_secret": _os.environ.get("FEEDBACK_APP_SECRET", "").strip()}),
+                    encoding="utf-8")
 else:
     _local = Path(_os.environ.get("LOCALAPPDATA", "~")).expanduser() / "ai_mind_build" / "feedback_target.json"
     _fb = _local if _local.exists() else None

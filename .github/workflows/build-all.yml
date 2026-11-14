@@ -45,6 +45,8 @@ jobs:
         env:   # 用户反馈发到哪个飞书群（仓库密钥，没设置也能打包）
           FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
           FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
+          FEEDBACK_APP_ID: ${{ secrets.FEEDBACK_APP_ID }}
+          FEEDBACK_APP_SECRET: ${{ secrets.FEEDBACK_APP_SECRET }}
       - name: 绿色版 zip
         shell: pwsh
         run: |
@@ -80,6 +82,8 @@ jobs:
         env:
           FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
           FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
+          FEEDBACK_APP_ID: ${{ secrets.FEEDBACK_APP_ID }}
+          FEEDBACK_APP_SECRET: ${{ secrets.FEEDBACK_APP_SECRET }}
       - run: mv dist/AIMind-Mac.dmg "dist/AIMind-${{ needs.version.outputs.v }}-mac-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
@@ -116,7 +120,7 @@ jobs:
           if-no-files-found: error
 
   ios:
-    name: 手机端 iPhone（未签名）
+    name: 手机端 iPhone
     needs: version
     runs-on: macos-latest
     defaults: { run: { working-directory: mobile } }
@@ -133,9 +137,22 @@ jobs:
           mkdir Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
           zip -qry "AIMind-$V-ios-unsigned.ipa" Payload
+      # 配了付费开发者账号的证书和描述文件（仓库密钥 IOS_P12_BASE64 / IOS_P12_PASSWORD / IOS_PROFILE_BASE64）
+      # 就再出一个签好名、能直接装的 AIMind-<版本>-ios.ipa；没配就只有未签名的（用免费 Apple ID 自签，见 docs/iphone-install.md）
+      - name: 签名
+        env:
+          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+        run: |
+          V=${{ needs.version.outputs.v }}
+          if [ -z "$IOS_P12_BASE64" ] || [ -z "$IOS_PROFILE_BASE64" ]; then
+            echo "::notice::没配 iPhone 签名证书，只出未签名的 IPA"; exit 0
+          fi
+          bash scripts/sign_ios.sh build/ios/iphoneos/Runner.app "AIMind-$V-ios.ipa"
       - uses: actions/upload-artifact@v4
         with:
-          name: mobile-ios-unsigned-ipa
+          name: mobile-ios-ipa
           path: mobile/AIMind-*.ipa
           if-no-files-found: error
 

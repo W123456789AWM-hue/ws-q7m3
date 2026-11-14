@@ -63,8 +63,12 @@ def mobile(platform: str = "android", abi: str = "arm64-v8a"):
     if not updater._st["manifest"] or time.time() - st["checked_at"] > 3600:
         updater.check(emit)
     m = updater._st["manifest"] or {}
-    key = ANDROID_KEYS.get(abi, "android-arm64") if platform == "android" else "ios"
-    a = (m.get("assets") or {}).get(key)
+    assets = m.get("assets") or {}
+    if platform == "android":
+        key = ANDROID_KEYS.get(abi, "android-arm64")
+    else:   # iPhone：有签好名的就给签好名的
+        key = "ios-signed" if "ios-signed" in assets else "ios"
+    a = assets.get(key)
     return {"desktop_version": updater.VERSION, "latest": m.get("version", ""), "notes": m.get("notes", ""),
             "date": m.get("date", ""), "error": updater._st["error"],
             "asset": {"key": key, "name": a["name"], "size": a["size"], "sha256": a["sha256"]} if a else None}

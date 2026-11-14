@@ -235,6 +235,72 @@ def test_feedback_sends_signed_card_and_queues_when_offline(monkeypatch, tmp_pat
         feedback.submit("bug", "   ")
 
 
+def test_feedback_images_upload_to_feishu_and_degrade_gracefully(monkeypatch, tmp_path):
+    """附图：配了自建应用就上传拿 image_key 放进卡片；没配 / 卡片不收图片时文字照样送到并注明"""
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from aimind import feedback
+    cards, uploads, mode = [], [], {"reject_img": False}
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+    class Lark(BaseHTTPRequestHandler):
+        def reply(self, obj):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(obj).encode())
+
+        def do_POST(self):
+            raw = self.rfile.read(int(self.headers["Content-Length"]))
+            if self.path.endswith("/tenant_access_token/internal"):
+                ok = json.loads(raw) == {"app_id": "cli_x", "app_secret": "appsec"}
+                return self.reply({"code": 0, "tenant_access_token": "t-1", "expire": 7200} if ok else {"code": 10014})
+            if self.path.endswith("/im/v1/images"):
+                assert self.headers["Authorization"] == "Bearer t-1" and b'name="image_type"' in raw and png in raw
+                uploads.append(1)
+                return self.reply({"code": 0, "data": {"image_key": f"img_v3_{len(uploads)}"}})
+            card = json.loads(raw)["card"]
+            has_img = any(e["tag"] == "img" for e in card["elements"])
+            if has_img and mode["reject_img"]:
+                return self.reply({"code": 11310, "msg": "image key invalid"})
+            cards.append(card)
+            self.reply({"code": 0})
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Lark)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    monkeypatch.setattr(feedback, "FEEDBACK_DIR", tmp_path)
+    monkeypatch.setattr(feedback, "FEISHU", base)
+    monkeypatch.setattr(feedback, "_token", {"value": "", "until": 0.0})
+    monkeypatch.setenv("AIMIND_FEEDBACK_WEBHOOK", base + "/hook")
+    monkeypatch.delenv("AIMIND_FEEDBACK_SECRET", raising=False)
+    try:
+        r = feedback.submit("bug", "没配图片通道", include_diag=False, images=[png])
+        assert r["status"] == "sent" and r["images"] == ["1.png"] and (tmp_path / r["id"] / "1.png").read_bytes() == png
+        assert "还有 1 张附图没能显示" in json.dumps(cards[-1], ensure_ascii=False)
+
+        monkeypatch.setenv("AIMIND_FEEDBACK_APP_ID", "cli_x")
+        monkeypatch.setenv("AIMIND_FEEDBACK_APP_SECRET", "appsec")
+        r = feedback.submit("bug", "两张图", include_diag=False, images=[png, png])
+        imgs = [e for e in cards[-1]["elements"] if e["tag"] == "img"]
+        assert r["status"] == "sent" and [e["img_key"] for e in imgs] == ["img_v3_1", "img_v3_2"]
+        assert "image_keys" not in r and "没能显示" not in json.dumps(cards[-1], ensure_ascii=False)
+
+        mode["reject_img"] = True                     # 卡片不收这些图片：文字先送到，注明原因
+        r = feedback.submit("idea", "图片被拒", include_diag=False, images=[png])
+        assert r["status"] == "sent" and "卡片放不进图片" in json.dumps(cards[-1], ensure_ascii=False)
+    finally:
+        srv.shutdown()
+    with pytest.raises(RuntimeError):
+        feedback.submit("bug", "不是图片", images=[b"hello world"])
+    with pytest.raises(RuntimeError):
+        feedback.submit("bug", "太多", images=[png] * 4)
+
+
 def test_feedback_redacts_secrets():
     from aimind.feedback import redact
     s = redact('api_key: "sk-abcDEF1234567890xyz" token=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 正常的话 v0.9.5')
