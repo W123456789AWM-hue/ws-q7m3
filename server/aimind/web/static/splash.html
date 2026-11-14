@@ -19,19 +19,20 @@
   const clamp = v => Math.min(4, Math.max(0.25, Number(v) || 1));
   let speed = clamp(new URLSearchParams(location.search).get('speed'));
   let finished = false;
-  function finish() {
+  function finish(skipped) {
     if (finished) return;
     finished = true;
     document.body.classList.add('out');
-    setTimeout(() => window.pywebview?.api?.done(), 350);
+    setTimeout(() => window.pywebview?.api?.done(skipped === true), 350);
   }
-  document.body.addEventListener('click', finish);
-  document.addEventListener('keydown', finish);
+  const started = () => { try { window.pywebview?.api?.started?.(); } catch (e) {} };   // 第一帧出来：开始放音效
+  document.body.addEventListener('click', () => finish(true));
+  document.addEventListener('keydown', () => finish(true));
 
   function plainImg() {                               // 原速播放
     const img = new Image();
     img.draggable = false;
-    img.onload = () => setTimeout(finish, DURATION + HOLD);
+    img.onload = () => { started(); setTimeout(finish, DURATION + HOLD); };
     img.onerror = finish;
     img.src = 'splash.webp?' + Date.now();
     document.body.appendChild(img);
@@ -46,6 +47,7 @@
     const cv = document.createElement('canvas');
     cv.width = first.displayWidth; cv.height = first.displayHeight;
     document.body.appendChild(cv);
+    started();
     const ctx = cv.getContext('2d');
     let due = performance.now();
     for (let i = 0; i < n && !finished; i++) {

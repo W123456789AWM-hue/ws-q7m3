@@ -14,6 +14,7 @@
 //   js/update.js     在线更新（顶栏提示 + 设置里的「软件更新」）
 //   js/settings/     设置：schema.js（设置项清单）+ view.js（界面、搜索、自动保存）
 //   js/ws.js         实时消息分发
+//   js/sound.js      按钮音效
 import {initActions} from './js/dom.js';
 import {initLayers} from './js/layers.js';
 import {initLive, renderAll, renderHeader} from './js/live.js';
@@ -25,8 +26,10 @@ import {initUpdate} from './js/update.js';
 import {initFeedback} from './js/feedback.js';
 import {initSettings} from './js/settings/view.js';
 import {connect} from './js/ws.js';
+import {initSound} from './js/sound.js';
 
 initActions();
+initSound();
 initLayers();
 initLive();
 initReviews();

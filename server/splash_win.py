@@ -105,17 +105,18 @@ def _frames(path: str, width: int):
 _playing = threading.Lock()
 
 
-def play(path: str, css_width: int = 760, fade: float = 0.3, speed: float = 1.0) -> None:
-    """speed：播放速度倍数（设置里的「启动动画速度」），2 = 快一倍"""
+def play(path: str, css_width: int = 760, fade: float = 0.3, speed: float = 1.0, on_start=None) -> bool:
+    """speed：播放速度倍数（设置里的「启动动画速度」），2 = 快一倍。
+    on_start：第一帧出现在屏幕上的那一刻调用（用来同步开始放音效）。返回 True = 被用户点掉了（跳过）"""
     if not _playing.acquire(blocking=False):   # 设置里连点「预览」时不要叠着放
-        return
+        return False
     try:
-        _play(path, css_width, fade, max(0.25, min(4.0, float(speed or 1))))
+        return _play(path, css_width, fade, max(0.25, min(4.0, float(speed or 1))), on_start)
     finally:
         _playing.release()
 
 
-def _play(path: str, css_width: int, fade: float, speed: float) -> None:
+def _play(path: str, css_width: int, fade: float, speed: float, on_start=None) -> bool:
     scale = _screen_scale()
     with Image.open(path) as im:
         src_w, src_h = im.size
@@ -190,6 +191,11 @@ def _play(path: str, css_width: int, fade: float, speed: float) -> None:
             if not shown:
                 user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
                 shown = True
+                if on_start:
+                    try:
+                        on_start()
+                    except Exception:
+                        pass
             pump()
             if state["skip"]:
                 break
@@ -203,6 +209,7 @@ def _play(path: str, css_width: int, fade: float, speed: float) -> None:
             show(int(255 * (1 - k)))
             pump()
             time.sleep(0.008)
+        return state["skip"]
     finally:
         user32.ShowWindow(hwnd, 0)
         gdi32.SelectObject(mem_dc, old)

@@ -6,6 +6,8 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'sfx.dart';
+
 /// 动画：Apple 风格的缓动（快出慢停），所有过渡都用这几个
 class Motion {
   static const ease = Cubic(.32, .72, 0, 1);
@@ -123,7 +125,7 @@ ThemeData buildTheme(Brightness b) {
   return base.copyWith(
     extensions: [c],
     scaffoldBackgroundColor: c.bg,
-    splashFactory: NoSplash.splashFactory, // 不要安卓的水波纹，按下只变暗一点
+    splashFactory: const ClickSplashFactory(), // 不要安卓的水波纹（按下只变暗一点），顺便放按钮音效
     highlightColor: c.fill.withValues(alpha: .12),
     dividerColor: c.sep,
     dividerTheme: DividerThemeData(color: c.sep, thickness: .5, space: .5),
@@ -266,6 +268,7 @@ class _PressableState extends State<Pressable> {
             ? null
             : () {
                 HapticFeedback.selectionClick();
+                Sfx.tap();
                 widget.onTap!();
               },
         child: AnimatedScale(

@@ -69,6 +69,8 @@ DEFAULTS: dict = {
     # ---- 桌面程序 ----
     "splash_enabled": True,           # 启动时播放启动动画
     "splash_speed": 1.0,              # 启动动画速度：0.5 = 慢一倍，2 = 快一倍
+    "splash_sound": True,             # 启动动画的音效
+    "sound_clicks": True,             # 界面按钮的点击音效
     "config_version": 3,
 }
 

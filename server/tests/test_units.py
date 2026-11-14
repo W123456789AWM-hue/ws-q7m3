@@ -326,3 +326,43 @@ def test_ai_request_retries_once_when_pooled_connection_was_closed(monkeypatch):
     monkeypatch.setattr(httpx.Client, "post", lambda *a, **k: (_ for _ in ()).throw(httpx.ReadTimeout("慢")))
     with pytest.raises(httpx.ReadTimeout):       # 超时（服务器可能已经在处理）不重发，免得重复计费
         llm.HTTP.post("http://x")
+
+
+def test_ui_sounds_are_valid_and_follow_splash_speed():
+    """界面音效：合法的 WAV、不爆音、没有突然的咔嗒声；启动音效跟着动画速度变短，主和弦落在标志拼合的时刻"""
+    import io
+    import wave
+
+    import numpy as np
+
+    from aimind import sounds
+    for data in (sounds.click_wav(), sounds.splash_wav(1), sounds.splash_wav(2)):
+        with wave.open(io.BytesIO(data)) as w:
+            assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, sounds.SR)
+            x = np.frombuffer(w.readframes(w.getnframes()), "<i2") / 32768
+        assert 0.2 < np.abs(x).max() < 0.75
+        assert np.abs(np.diff(x)).max() < 0.2           # 没有突变（咔嗒声）
+    assert 0.03 < len(sounds.click()) / sounds.SR < 0.06
+    one, two = sounds.splash(1), sounds.splash(2)
+    assert len(two) < len(one)
+
+    def loudest(x):          # 最响的 0.1 秒在哪
+        w = int(0.1 * sounds.SR)
+        e = [np.sum(x[i:i + w] ** 2) for i in range(0, len(x) - w, w // 2)]
+        return int(np.argmax(e)) * (w // 2) / sounds.SR
+
+    assert abs(loudest(one) - sounds.SPLASH_EVENTS["reveal"]) < 0.25
+    assert abs(loudest(two) - sounds.SPLASH_EVENTS["reveal"] / 2) < 0.25
+
+
+def test_desktop_splash_sound_respects_setting(monkeypatch, tmp_path):
+    import desktop_app
+    from aimind import config
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "config.json", raising=False)
+    monkeypatch.setattr(config, "load", lambda: {**config.DEFAULTS, "splash_sound": True})
+    s = desktop_app.SplashSound(1.5)
+    assert s.path and s.path.exists() and s.path.stat().st_size > 100_000
+    monkeypatch.setattr(config, "load", lambda: {**config.DEFAULTS, "splash_sound": False})
+    assert desktop_app.SplashSound(1.5).path is None
+    desktop_app.SplashSound(1.5).stop()              # 没开声音时停也不出错

@@ -156,6 +156,55 @@ STATIC = Path(__file__).resolve().parent / "aimind" / "web" / "static"
 SPLASH_SIZE = (760, 290)          # 启动动画窗口大小（splash.webp 是 1000x381，按比例缩小）
 
 
+class SplashSound:
+    """启动动画的音效：按动画速度现场生成（aimind/sounds.py，第一次约半秒，之后用缓存），
+    Windows 用系统的 winsound、Mac 用自带的 afplay 播放。设置里关掉了、或者出任何问题都静默跳过，不影响动画"""
+
+    def __init__(self, speed: float):
+        self.path = None
+        self.proc = None
+        try:
+            from aimind import config
+            if not config.load().get("splash_sound", True) or os.environ.get("AIMIND_NO_SPLASH_SOUND"):
+                return
+            from aimind import sounds
+            path = config.DATA_DIR / "cache" / f"splash-sound-{speed:g}-v1.wav"
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_suffix(".tmp")
+                tmp.write_bytes(sounds.splash_wav(speed))
+                tmp.replace(path)
+            self.path = path
+        except Exception as e:
+            print(f"启动音效准备失败（不影响使用）：{e}", file=sys.stderr)
+
+    def start(self) -> None:
+        if not self.path:
+            return
+        try:
+            if sys.platform == "win32":
+                import winsound
+                flags = winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
+                winsound.PlaySound(str(self.path), flags)
+            elif sys.platform == "darwin":
+                import subprocess
+                self.proc = subprocess.Popen(["afplay", str(self.path)],
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"启动音效播放失败（不影响使用）：{e}", file=sys.stderr)
+
+    def stop(self) -> None:
+        """用户点掉了动画：声音也停（正常放完时不调用，让余音自然收尾）"""
+        try:
+            if sys.platform == "win32" and self.path:
+                import winsound
+                winsound.PlaySound(None, 0)
+            if self.proc and self.proc.poll() is None:
+                self.proc.terminate()
+        except Exception:
+            pass
+
+
 def splash_settings() -> tuple[bool, float]:
     """(要不要播启动动画, 速度)。设置里可以改；环境变量 AIMIND_NO_SPLASH=1 也能关掉"""
     try:
@@ -174,11 +223,21 @@ class SplashApi:
     def __init__(self, on_done, speed: float = 1.0):
         self._on_done = on_done
         self._speed = speed
+        self._sound = SplashSound(speed)
+        self._started = False
 
     def speed(self):
         return self._speed
 
-    def done(self):
+    def started(self):
+        """页面显示出第一帧了：开始放音效"""
+        if not self._started:
+            self._started = True
+            self._sound.start()
+
+    def done(self, skipped=False):
+        if skipped:
+            self._sound.stop()
         self._on_done()
 
 
@@ -200,8 +259,13 @@ def register_preview(webview) -> None:
     def preview(speed: float):
         if sys.platform == "win32":
             import splash_win
-            threading.Thread(target=splash_win.play, args=(str(STATIC / "splash.webp"),),
-                             kwargs={"css_width": SPLASH_SIZE[0], "speed": speed}, daemon=True).start()
+
+            def run():
+                sound = SplashSound(speed)
+                if splash_win.play(str(STATIC / "splash.webp"), css_width=SPLASH_SIZE[0], speed=speed,
+                                   on_start=sound.start):
+                    sound.stop()
+            threading.Thread(target=run, daemon=True).start()
             return
         box = {}
 
@@ -249,7 +313,10 @@ def open_window() -> bool:
         use_splash = False
         try:
             import splash_win
-            splash_win.play(str(STATIC / "splash.webp"), css_width=SPLASH_SIZE[0], speed=speed)
+            sound = SplashSound(speed)
+            if splash_win.play(str(STATIC / "splash.webp"), css_width=SPLASH_SIZE[0], speed=speed,
+                               on_start=sound.start):
+                sound.stop()
         except Exception as e:
             print(f"启动动画播放失败（不影响使用）：{e}", file=sys.stderr)
 

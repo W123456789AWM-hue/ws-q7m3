@@ -70,6 +70,16 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
 - 测试（`flutter test`）：`standalone_test.dart` 用假 AI 接口跑完整的独立复盘流程；`ui_smoke_test.dart` 把四个页面都画一遍，
   设环境变量 `UI_SHOTS=<文件夹>` 会存成 PNG（本机没有安卓环境时靠它看界面）。
 
+## 界面音效
+
+- 声音用代码合成（`server/aimind/sounds.py`，不用外部素材）：按钮的轻点声 + 启动动画音效（时间点对齐 splash.webp 的画面，`SPLASH_EVENTS`）。
+- 改了 sounds.py 后运行 `python packaging/make_sounds.py`，重新生成网页和手机用的 wav 文件并提交。
+  电脑端的启动音效不用文件：desktop_app.py 的 `SplashSound` 按设置的动画速度现场生成（缓存在数据目录 cache/），
+  Windows 用 winsound、Mac 用 afplay；用户点掉动画时声音也停。
+- 网页按钮音效：`js/sound.js`（Web Audio）。手机：`ui/sfx.dart`（audioplayers），所有 Material 按钮通过主题的
+  `ClickSplashFactory` 自动出声，自定义的 `Pressable` / `Segmented` 自己调 `Sfx.tap()`；录音时一律不响。
+- 设置：电脑 `sound_clicks`、`splash_sound`；手机 `soundClicks`、`splashSound`。
+
 ## 复盘层级
 
 - 小复盘（阶段复盘）：录音中按 `review_mode`（realtime / interval）触发，engine.py。

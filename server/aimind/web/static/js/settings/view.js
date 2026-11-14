@@ -4,7 +4,7 @@ import {$, $$, actions, esc, icon, onChange, onInput} from '../dom.js';
 import {api, getJSON, postJSON} from '../api.js';
 import {replay, segmented, settled, swap} from '../anim.js';
 import {layerOpen, openLayer, toast} from '../layers.js';
-import {on, state} from '../state.js';
+import {emit, on, state} from '../state.js';
 import {loadUsage, usageHtml} from '../usage.js';
 import {updateHtml} from '../update.js';
 import {feedbackHtml, loadFeedback} from '../feedback.js';
@@ -124,6 +124,7 @@ async function save(k, v) {
   if (k === 'theme') { setTheme(v); flashSaved(); return; }
   if (k === 'review_interval_min') v = Math.max(1, Math.min(240, v || 30));
   cfg[k] = v;
+  emit('config', cfg);              // 按钮音效等即时生效
   refreshVisibility();
   await postJSON('/api/config', {[k]: v});
   flashSaved();
@@ -192,6 +193,7 @@ export async function openSettings(focus) {
   // 只等设置本身（很快）；麦克风列表、模型状态、用量在后台取，取到了再刷新当前页（打开不卡顿）
   const [c, app] = await Promise.all([getJSON('/api/config'), state.app || getJSON('/api/app_info').catch(() => ({}))]);
   cfg = c; state.app = app;
+  emit('config', cfg);
   const target = focus && ALL.find(x => x.k === focus);   // 从别处点进来（比如顶栏“新版本”）：直接定位到那一项
   if (target) current = target.cat.id;
   $('setSearch').value = ''; $('setResults').hidden = true;

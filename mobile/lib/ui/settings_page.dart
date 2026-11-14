@@ -5,6 +5,7 @@ import '../core/ai.dart';
 import '../core/settings.dart';
 import 'feedback_section.dart';
 import 'home_page.dart' show Segmented;
+import 'sfx.dart';
 import 'theme.dart';
 import 'update_section.dart';
 
@@ -465,6 +466,15 @@ class _SettingsPageState extends State<SettingsPage> {
             if (!s.standalone) ..._remoteWidgets(),
             _title('界面'),
             _switch('启动动画', '打开 App 时播放，点一下可以跳过', s.splash, (v) => s.splash = v),
+            if (s.splash)
+              _switch('启动音效', '和启动动画一起播放；手机静音时不响', s.splashSound, (v) {
+                s.splashSound = v;
+                Sfx.splashSound = v;
+              }),
+            _switch('按钮音效', '点按钮时轻轻“嗒”一声；录音时自动不响（免得被录进去）', s.soundClicks, (v) {
+              s.soundClicks = v;
+              Sfx.clicks = v;
+            }),
             _switch('自动检查新版本', '打开 App 时看一眼有没有新版本，有的话在「设置」上显示小蓝点', s.autoCheckUpdate,
                 (v) => s.autoCheckUpdate = v),
             UpdateSection(app: app),

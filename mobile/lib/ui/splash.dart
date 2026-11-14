@@ -5,17 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import 'sfx.dart';
 import 'theme.dart';
 
-/// 启动动画：和电脑端同一段动画（assets/splash.webp，透明背景的 301 帧，文件里没写帧间隔，
-/// 所以这里自己按 60 帧 / 秒逐帧播放）。播完淡出并轻微放大，露出下面的界面；点一下可以跳过。
+/// 启动动画：和电脑端同一段动画（assets/splash.webp，透明背景，按文件里每一帧的真实时长、乘上 [speed] 播放），
+/// 配上启动音效（assets/sounds/splash.wav，按同样的速度生成，见 server/packaging/make_sounds.py，所以画面和声音对得上）。
+/// 播完淡出并轻微放大，露出下面的界面；点一下可以跳过（声音也淡出）。
 /// 解码失败、太慢都不会卡住：最多 [maxWait] 后一定让开。
 class SplashOverlay extends StatefulWidget {
-  const SplashOverlay({super.key, required this.onDone, this.speed = 1.4});
+  const SplashOverlay({super.key, required this.onDone, this.speed = 1.5}); // 改速度要同步改 make_sounds.py
   final VoidCallback onDone;
   final double speed;
 
-  static const maxWait = Duration(seconds: 7);
+  static const maxWait = Duration(seconds: 8);
+  static const lastHold = Duration(milliseconds: 900); // 最后一帧（完整的标志）停留多久
 
   @override
   State<SplashOverlay> createState() => _SplashOverlayState();
@@ -27,7 +30,8 @@ class _SplashOverlayState extends State<SplashOverlay> with SingleTickerProvider
   Ticker? _ticker;
   Timer? _guard;
   int _shown = 0; // 已经显示到第几帧
-  bool _decoding = false, _leaving = false, _gone = false;
+  Duration _nextAt = Duration.zero; // 下一帧该在什么时候出现
+  bool _decoding = false, _leaving = false, _gone = false, _skipped = false;
 
   @override
   void initState() {
@@ -52,20 +56,24 @@ class _SplashOverlayState extends State<SplashOverlay> with SingleTickerProvider
 
   Future<void> _tick(Duration elapsed) async {
     final codec = _codec;
-    if (codec == null || _decoding || _leaving) return;
-    final want = (elapsed.inMicroseconds * 60 * widget.speed / 1e6).floor() + 1;
-    if (want <= _shown) return;
+    if (codec == null || _decoding || _leaving || elapsed < _nextAt) return;
     if (_shown >= codec.frameCount) return _leave();
     _decoding = true;
     try {
-      // 手机解码跟不上时跳帧，保证总时长不变
+      // 手机解码跟不上时跳帧，保证总时长不变（声音和画面不会越走越错开）
       ui.Image? img;
-      while (_shown < want && _shown < codec.frameCount) {
+      while (_shown < codec.frameCount && elapsed >= _nextAt) {
         img?.dispose();
-        img = (await codec.getNextFrame()).image;
+        final f = await codec.getNextFrame();
+        img = f.image;
         _shown++;
+        var dur = f.duration.inMicroseconds > 0 ? f.duration : const Duration(microseconds: 16667);
+        dur = Duration(microseconds: dur.inMicroseconds ~/ widget.speed);
+        if (_shown == codec.frameCount && dur > SplashOverlay.lastHold) dur = SplashOverlay.lastHold;
+        _nextAt += dur;
       }
       if (!mounted) return img?.dispose();
+      if (_frame == null) unawaited(Sfx.splash()); // 第一帧出现：开始放声音
       final old = _frame;
       setState(() => _frame = img);
       old?.dispose();
@@ -76,8 +84,14 @@ class _SplashOverlayState extends State<SplashOverlay> with SingleTickerProvider
     }
   }
 
+  void _skip() {
+    _skipped = true;
+    _leave();
+  }
+
   void _leave() {
     if (_leaving || !mounted) return;
+    if (_skipped) unawaited(Sfx.stopSplash()); // 正常放完时不停，让余音自然收尾
     _guard?.cancel();
     _ticker?.stop();
     setState(() => _leaving = true);
@@ -97,7 +111,7 @@ class _SplashOverlayState extends State<SplashOverlay> with SingleTickerProvider
     if (_gone) return const SizedBox.shrink();
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: _leave,
+      onTap: _skip,
       child: AnimatedOpacity(
         opacity: _leaving ? 0 : 1,
         duration: Motion.slow,

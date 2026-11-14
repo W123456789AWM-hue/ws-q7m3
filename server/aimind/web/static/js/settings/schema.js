@@ -19,6 +19,9 @@ export const CATEGORIES = [
     {title: '外观', items: [
       {k: 'theme', label: '外观', desc: '跟随系统的深色 / 浅色，或者固定一种', type: 'theme', kw: '主题 深色 浅色 暗色 夜间 dark light'},
     ]},
+    {title: '声音', items: [
+      {k: 'sound_clicks', label: '按钮音效', desc: '点按钮、开关时轻轻“嗒”一声', type: 'bool', kw: '音效 声音 点击 静音 提示音'},
+    ]},
     {title: '让 AI 更懂你', items: [
       {k: 'about_me', label: '关于我', desc: '你的身份、正在做的事、长期目标。AI 据此推断你的潜在需求（强烈建议填写）', type: 'textarea', kw: '个人 简介 身份 目标'},
       {k: 'glossary', label: '常说的词 / 专有名词', desc: '人名、公司名、产品名、英文术语，用逗号隔开。听写时会按这些词来写', type: 'textarea', kw: '术语 词库 人名 识别错'},
@@ -98,6 +101,7 @@ export const CATEGORIES = [
   {id: 'desktop', name: '启动动画', icon: 'play', color: '#5e5ce6', groups: [
     {title: '桌面程序', items: [
       {k: 'splash_enabled', label: '打开程序时播放启动动画', type: 'bool', kw: '开机 动画 logo'},
+      {k: 'splash_sound', label: '启动音效', desc: '和动画一起播放；点动画跳过时声音也会停', type: 'bool', when: c => c.splash_enabled !== false, kw: '音效 声音 静音 音乐'},
       {k: 'splash_speed', label: '动画速度', desc: '1× 约 8 秒；点动画也能直接跳过', type: 'seg', when: c => c.splash_enabled !== false, kw: '快 慢',
         options: [[0.5, '0.5×'], [0.75, '0.75×'], [1, '1×'], [1.5, '1.5×'], [2, '2×'], [3, '3×']]},
       {k: 'splash', label: '预览启动动画', desc: '按上面的速度播放一遍', type: 'preview', when: c => c.splash_enabled !== false},

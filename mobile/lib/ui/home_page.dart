@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../android_bridge.dart';
 import '../app_state.dart';
 import '../core/util.dart';
+import 'sfx.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -501,7 +502,10 @@ class Segmented extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
-                  if (i != index) HapticFeedback.selectionClick();
+                  if (i != index) {
+                    HapticFeedback.selectionClick();
+                    Sfx.tap();
+                  }
                   onChanged(i);
                 },
                 child: Center(

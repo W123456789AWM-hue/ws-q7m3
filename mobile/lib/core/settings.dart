@@ -35,6 +35,8 @@ class AppSettings {
 
   // ---- 界面 ----
   bool splash = true; // 打开 App 时播放启动动画
+  bool splashSound = true; // 启动动画的音效
+  bool soundClicks = true; // 按钮音效
   bool autoCheckUpdate = true; // 打开 App 时自动检查新版本（每天最多一次）
   String updateMirror = ''; // 下载更新用的镜像（一般不用填）
 
@@ -65,6 +67,8 @@ class AppSettings {
         'glossary': glossary,
         'extraInstructions': extraInstructions,
         'splash': splash,
+        'splashSound': splashSound,
+        'soundClicks': soundClicks,
         'autoCheckUpdate': autoCheckUpdate,
         'updateMirror': updateMirror,
       };
@@ -108,6 +112,8 @@ class AppSettings {
     glossary = s('glossary', glossary);
     extraInstructions = s('extraInstructions', extraInstructions);
     splash = b('splash', splash);
+    splashSound = b('splashSound', splashSound);
+    soundClicks = b('soundClicks', soundClicks);
     autoCheckUpdate = b('autoCheckUpdate', autoCheckUpdate);
     updateMirror = s('updateMirror', updateMirror).trim();
   }

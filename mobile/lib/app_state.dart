@@ -12,6 +12,7 @@ import 'core/settings.dart';
 import 'core/updater.dart';
 import 'core/uploader.dart';
 import 'recorder.dart';
+import 'ui/sfx.dart';
 import 'ui/update_section.dart' show appVersion, newer;
 
 /// 手机端：录音 → 切片暂存 → 传给电脑（或者「手机独立复盘」：手机自己交给 AI）；界面显示转写和复盘
@@ -88,6 +89,10 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> init() async {
+    Sfx.clicks = settings.soundClicks;
+    Sfx.splashSound = settings.splashSound;
+    Sfx.busy = () => recording || starting;
+    unawaited(Sfx.init());
     uploader.startTimer();
     unawaited(uploader.kick()); // 上次没传完的接着传
     await _checkNetwork();
@@ -162,6 +167,7 @@ class AppState extends ChangeNotifier {
     await mic.stop();
     spool.stop(); // 写入停止标记：电脑收到后做整场总复盘
     recordStart = null;
+    Sfx.afterRecording();
     await AndroidBridge.stopForegroundService();
     notifyListeners();
     unawaited(standalone ? engine.kick() : uploader.kick(force: true));
