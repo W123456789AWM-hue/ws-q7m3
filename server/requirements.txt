@@ -5,3 +5,4 @@ python-multipart
 httpx
 numpy
 sounddevice
+certifi                 # HTTPS 证书（打包好的 Mac 程序读不到系统证书，在线更新要用）

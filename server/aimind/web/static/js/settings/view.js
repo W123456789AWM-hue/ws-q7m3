@@ -144,6 +144,8 @@ function saveLater(input) {          // 打字时停一下再保存
 
 // ---------- 搜索 ----------
 let hits = [], sel = 0;
+/** 搜索结果右边的小字：分组名（同名的「接口地址」能分清是哪一个），太长就用分类名 */
+const where = f => { const g = f.group.title.split('（')[0]; return g.length <= 8 ? g : f.cat.name; };
 const norm = s => String(s || '').toLowerCase();
 
 function search(q) {
@@ -161,7 +163,7 @@ function search(q) {
   renderCats(counts);
   const mark = s => esc(s).replace(new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi'), m => `<mark>${m}</mark>`);
   box.innerHTML = hits.length ? hits.slice(0, 8).map((f, i) =>
-    `<button class="${i === sel ? 'sel' : ''}" data-action="gotoField" data-arg="${f.k}">${mark(f.label)}<small>${esc(f.cat.name)}</small></button>`).join('')
+    `<button class="${i === sel ? 'sel' : ''}" data-action="gotoField" data-arg="${f.k}">${mark(f.label)}<small>${esc(where(f))}</small></button>`).join('')
     : '<div class="none">没有找到相关设置</div>';
   box.hidden = false;
 }
@@ -226,6 +228,17 @@ export function initSettings() {
   });
   onChange({setField: input => save(input.dataset.k, readValue(input))});
   onInput({setFieldLater: saveLater, searchSettings: input => search(input.value)});
+  // 中文输入法：拼音打完 / 删光时不一定触发 input，在这几个时机再刷新一次，免得搜索结果残留
+  const box = $('setSearch');
+  let last = null;
+  for (const ev of ['compositionend', 'keyup', 'search', 'change']) {
+    box.addEventListener(ev, e => {
+      if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;   // 上下选结果时不要重置
+      if (box.value === last && ev === 'keyup') return;
+      last = box.value;
+      search(box.value);
+    });
+  }
   $('setSearch').addEventListener('keydown', e => {
     if (!hits.length) return;
     const btns = $$('#setResults button');

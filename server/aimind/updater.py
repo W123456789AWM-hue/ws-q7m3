@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import platform
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -73,10 +74,28 @@ def _url(url: str, cfg: dict) -> str:
     return mirror.rstrip("/") + "/" + url if mirror else url
 
 
+_ctx: ssl.SSLContext | None = None
+
+
+def ssl_context() -> ssl.SSLContext:
+    """HTTPS 证书：系统自带的 + certifi 的（打包好的 Mac 程序用的是自带的 Python，读不到 Mac 系统的证书，
+    只用系统的会报 CERTIFICATE_VERIFY_FAILED；Windows 上系统证书照常可用，公司代理装的证书也认）"""
+    global _ctx
+    if _ctx is None:
+        ctx = ssl.create_default_context()
+        try:
+            import certifi
+            ctx.load_verify_locations(certifi.where())
+        except Exception:
+            pass
+        _ctx = ctx
+    return _ctx
+
+
 def _open(url: str, timeout: float = 30):
     # urllib 会用系统代理（Windows 注册表 / Mac 系统设置），和浏览器一样能连上 GitHub
     req = urllib.request.Request(url, headers={"User-Agent": f"AIMind/{VERSION}"})
-    return urllib.request.urlopen(req, timeout=timeout)
+    return urllib.request.urlopen(req, timeout=timeout, context=ssl_context())
 
 
 PUBLIC_KEY = UPDATE_PUBLIC_KEY      # 测试时可以换成临时密钥

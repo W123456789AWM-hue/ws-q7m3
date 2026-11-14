@@ -1,6 +1,6 @@
 [project]
 name = "aimind"
-version = "0.9.2"   # 以 aimind/version.py 为准
+version = "0.9.3"   # 以 aimind/version.py 为准
 description = "AI 录音思考助手（电脑端服务）"
 requires-python = ">=3.10"
 
