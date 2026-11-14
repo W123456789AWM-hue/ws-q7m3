@@ -33,9 +33,9 @@ else:
     _fb = _local if _local.exists() else None
 if _fb:
     datas.append((str(_fb), "aimind"))
-    print("用户反馈：已接通飞书机器人")
+    print("feedback: webhook configured")   # 只用英文：云端 Windows 控制台是 cp1252，打印中文会直接报错
 else:
-    print("用户反馈：没有配置机器人地址，打出来的程序只能先把反馈存在本机")
+    print("feedback: no webhook, feedback will be queued locally")
 
 a = Analysis(
     [str(SERVER / "desktop_app.py")],
