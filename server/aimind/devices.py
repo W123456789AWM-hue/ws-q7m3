@@ -34,6 +34,7 @@ class DeviceIngest:
     def __init__(self, engine, emit):
         self.engine, self.emit = engine, emit
         self.lock = threading.Lock()
+        self.dir_lock = threading.Lock()     # inbox 文件夹：接收时建、处理完删，两边要互斥
         self.reg: dict[str, dict] = {}
         try:
             self.reg = json.loads(REGISTRY.read_text(encoding="utf-8"))
@@ -48,20 +49,22 @@ class DeviceIngest:
     def accept(self, device: str, name: str, stream: str, seq: int, start: str, dur: float,
                silent: bool, data: bytes, kind: str = "chunk", enc: str = "pcm") -> dict:
         dev = self._seen(device, name)
+        if kind == "chunk" and not silent and enc == "adpcm":   # 移动网络下压缩上传的，先还原
+            data = decode(data, int(round(dur * SR))).tobytes()
+        if kind == "stop":       # 停止标记没有录音时间，按收到的时间排
+            start = datetime.now().isoformat(timespec="milliseconds")
         d = INBOX / dev / safe_id(stream)
-        d.mkdir(parents=True, exist_ok=True)
         meta = d / f"{seq:08d}.json"
-        if not meta.exists():   # 重复上传（设备没收到回复又传了一次）直接确认
-            if kind == "chunk" and not silent:
-                if enc == "adpcm":   # 移动网络下压缩上传的，先还原
-                    data = decode(data, int(round(dur * SR))).tobytes()
-                (d / f"{seq:08d}.pcm").write_bytes(data)
-            if kind == "stop":       # 停止标记没有录音时间，按收到的时间排
-                start = datetime.now().isoformat(timespec="milliseconds")
-            tmp = meta.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"kind": kind, "start": start, "dur": dur, "silent": silent}),
-                           encoding="utf-8")
-            tmp.replace(meta)
+        # 和后台“删掉空文件夹”互斥：否则可能刚建好文件夹就被删了，写文件时报 FileNotFoundError
+        with self.dir_lock:
+            d.mkdir(parents=True, exist_ok=True)
+            if not meta.exists():   # 重复上传（设备没收到回复又传了一次）直接确认
+                if kind == "chunk" and not silent:
+                    (d / f"{seq:08d}.pcm").write_bytes(data)
+                tmp = meta.with_suffix(".tmp")
+                tmp.write_text(json.dumps({"kind": kind, "start": start, "dur": dur, "silent": silent}),
+                               encoding="utf-8")
+                tmp.replace(meta)
         return {"ok": True, "seq": seq, "device": dev}
 
     def _seen(self, device: str, name: str) -> str:
@@ -157,8 +160,9 @@ class DeviceIngest:
         finally:
             pcm_file.unlink(missing_ok=True)
             meta.unlink(missing_ok=True)
-            for d in (meta.parent, meta.parent.parent):   # 目录空了就删
-                try:
-                    d.rmdir()
-                except OSError:
-                    pass
+            with self.dir_lock:                       # 和接收互斥（见 accept）
+                for d in (meta.parent, meta.parent.parent):   # 目录空了就删
+                    try:
+                        d.rmdir()
+                    except OSError:
+                        pass
