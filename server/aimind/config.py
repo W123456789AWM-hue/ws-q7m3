@@ -107,7 +107,6 @@ def save(cfg: dict) -> dict:
         for k in DEFAULTS:
             if k in cfg:
                 merged[k] = cfg[k]
-        tmp = CONFIG_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(CONFIG_FILE)
+        from .fsutil import write_atomic  # 放这里：避免和 config 互相导入
+        write_atomic(CONFIG_FILE, json.dumps(merged, ensure_ascii=False, indent=2))
         return merged

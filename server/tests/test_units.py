@@ -366,3 +366,40 @@ def test_desktop_splash_sound_respects_setting(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "load", lambda: {**config.DEFAULTS, "splash_sound": False})
     assert desktop_app.SplashSound(1.5).path is None
     desktop_app.SplashSound(1.5).stop()              # 没开声音时停也不出错
+
+
+def test_file_writes_survive_brief_windows_locks(monkeypatch, tmp_path):
+    """Windows 上文件偶尔被杀毒软件 / 同步线程短暂占用（PermissionError）：等一等再写，不让复盘失败。
+    （云端测试曾因此偶发失败：transcript.jsonl 拒绝访问 → 那一轮复盘报错）"""
+    import builtins
+    import json
+    from pathlib import Path
+
+    from aimind import fsutil
+    monkeypatch.setattr(fsutil, "DELAYS", (0, 0, 0, 0))
+    real_open, real_replace = builtins.open, Path.replace
+    fails = {"open": 2, "replace": 2}
+
+    def flaky_open(file, mode="r", *a, **k):
+        if "a" in mode and fails["open"] > 0:
+            fails["open"] -= 1
+            raise PermissionError(13, "Permission denied", str(file))
+        return real_open(file, mode, *a, **k)
+
+    def flaky_replace(self, target):
+        if fails["replace"] > 0:
+            fails["replace"] -= 1
+            raise PermissionError(13, "Permission denied", str(target))
+        return real_replace(self, target)
+
+    monkeypatch.setattr(builtins, "open", flaky_open)
+    monkeypatch.setattr(Path, "replace", flaky_replace)
+    log = tmp_path / "transcript.jsonl"
+    assert fsutil.append_jsonl(log, [{"text": "第一句"}, {"text": "第二句"}])
+    assert [json.loads(x)["text"] for x in log.read_text(encoding="utf-8").splitlines()] == ["第一句", "第二句"]
+    fsutil.write_atomic(tmp_path / "session.json", '{"ok": 1}')
+    assert json.loads((tmp_path / "session.json").read_text(encoding="utf-8")) == {"ok": 1}
+
+    # 一直被占着：附带的日志写不进去也只是记一笔，不抛错
+    fails["open"] = 99
+    assert fsutil.append_jsonl(log, [{"text": "第三句"}]) is False

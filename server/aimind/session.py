@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import DATA_DIR
+from .fsutil import retry, write_atomic
 
 SESSIONS_DIR = DATA_DIR / "sessions"
 DAILY_DIR = DATA_DIR / "daily"
@@ -81,10 +82,8 @@ class Session:
 
     def save(self):
         d = self.to_dict()
-        tmp = self.dir / "session.json.tmp"
-        tmp.write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        tmp.replace(self.dir / "session.json")
-        (self.dir / "report.md").write_text(render_markdown(d), encoding="utf-8")
+        write_atomic(self.dir / "session.json", json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+        retry(lambda: (self.dir / "report.md").write_text(render_markdown(d), encoding="utf-8"))
 
 
 def load_session(sid: str) -> Optional[dict]:

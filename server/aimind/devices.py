@@ -19,6 +19,7 @@ import numpy as np
 from . import config as config_mod
 from .audio import SR
 from .audio.adpcm import decode
+from .fsutil import write_atomic
 
 INBOX = config_mod.DATA_DIR / "inbox"
 REGISTRY = config_mod.DATA_DIR / "devices.json"
@@ -61,10 +62,7 @@ class DeviceIngest:
             if not meta.exists():   # 重复上传（设备没收到回复又传了一次）直接确认
                 if kind == "chunk" and not silent:
                     (d / f"{seq:08d}.pcm").write_bytes(data)
-                tmp = meta.with_suffix(".tmp")
-                tmp.write_text(json.dumps({"kind": kind, "start": start, "dur": dur, "silent": silent}),
-                               encoding="utf-8")
-                tmp.replace(meta)
+                write_atomic(meta, json.dumps({"kind": kind, "start": start, "dur": dur, "silent": silent}))
         return {"ok": True, "seq": seq, "device": dev}
 
     def _seen(self, device: str, name: str) -> str:
@@ -83,9 +81,7 @@ class DeviceIngest:
         return dev
 
     def _save_reg(self):
-        tmp = REGISTRY.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.reg, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(REGISTRY)
+        write_atomic(REGISTRY, json.dumps(self.reg, ensure_ascii=False, indent=1))
 
     def rename(self, dev: str, name: str):
         with self.lock:

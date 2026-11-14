@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import json
 import queue
 import threading
 import time
@@ -26,6 +25,7 @@ from . import nas
 from .audio import SR, Segmenter, Utterance, read_wav_16k
 from .audio.mic import MIC_DEVICE, MicSource
 from .audio.wavstore import WavStore
+from .fsutil import append_jsonl
 from .review import daily, prompts
 from .review.listen import audio_review
 from .review.llm import chat, parse_json, repair_json
@@ -301,8 +301,7 @@ class Engine:
         cur["segments"].append(seg)
         cur["text"] += text
         if text:
-            with open(s.dir / "transcript.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps(seg, ensure_ascii=False) + "\n")
+            append_jsonl(s.dir / "transcript.jsonl", [seg])
         self.emit({"type": "caption", "pid": cur["id"], "clock": seg["clock"], "text": text,
                    "sec": seg.get("sec"), "device_name": tr.name})
         if seg["t1"] - cur["start_t"] >= float(self.cfg.get("max_paragraph_sec") or 180):
@@ -470,9 +469,8 @@ class Engine:
                 (s.dir / "clips" / c).unlink(missing_ok=True)
         r["text"] = "\n\n".join(blocks)
         r["chars"] = len(r["text"])
-        with open(s.dir / "transcript.jsonl", "a", encoding="utf-8") as f:
-            for ln in lines:
-                f.write(json.dumps(ln, ensure_ascii=False) + "\n")
+        # 听写记录只是附带的日志：Windows 上文件偶尔被杀毒软件 / 同步线程占着，等一等再写，实在不行也不让这次复盘失败
+        append_jsonl(s.dir / "transcript.jsonl", lines)
 
     # ======================= 监控（每秒）=======================
     def _monitor(self):
