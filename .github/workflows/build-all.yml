@@ -101,6 +101,19 @@ jobs:
           FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
           FEEDBACK_APP_ID: ${{ secrets.FEEDBACK_APP_ID }}
           FEEDBACK_APP_SECRET: ${{ secrets.FEEDBACK_APP_SECRET }}
+      # 模拟在线更新：用程序里的更新脚本，拿刚打好的 dmg 替换一个“旧版”.app，要成功
+      - name: 试一次在线更新
+        run: |
+          apps="$RUNNER_TEMP/Apps"; app="$apps/AI录音思考助手.app"; mkdir -p "$apps"
+          mnt="$(mktemp -d)"; hdiutil attach -nobrowse -quiet -mountpoint "$mnt" dist/AIMind-Mac.dmg
+          ditto "$(ls -d "$mnt"/*.app | head -1)" "$app"; hdiutil detach -quiet "$mnt"
+          touch "$app/Contents/OLD_MARKER"
+          "${TMPDIR:-/tmp}/aimind_build_venv/bin/python" -c "from aimind import updater; print(updater._MAC_SCRIPT)" > "$RUNNER_TEMP/up.sh"
+          ok=0; AIMIND_UPDATE_NO_OPEN=1 bash "$RUNNER_TEMP/up.sh" 999999 "$PWD/dist/AIMind-Mac.dmg" "$app" || ok=$?
+          tail -4 ~/Library/Logs/AIMind-update.log
+          [ "$ok" = 0 ] && [ -x "$app/Contents/MacOS/AIMind" ] && [ ! -e "$app/Contents/OLD_MARKER" ] && [ ! -e "$app.old" ] \
+            || { echo "::error::mac online update failed"; exit 1; }
+          echo "mac update OK"
       - run: mv dist/AIMind-Mac.dmg "dist/AIMind-${{ needs.version.outputs.v }}-mac-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4
         with:

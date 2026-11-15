@@ -64,6 +64,14 @@ def install_problem() -> str:
         extra = {p.name.lower() for p in here.iterdir()} - {"aimind.exe", "_internal", "uninstall.ps1"}
         if extra:   # 绿色版放在了有别的文件的文件夹里：自动替换可能误删东西
             return f"程序所在的文件夹（{here}）里还有别的文件，为安全起见不自动替换。请下载安装程序手动安装"
+    else:
+        app = mac_app_path()
+        if "/AppTranslocation/" in str(app) or str(app).startswith("/Volumes/"):
+            # 直接在安装盘或「下载」里打开的：系统把它放在只读的临时位置，替换不了
+            return ("程序是直接从安装盘或「下载」文件夹里打开的，不能替换自己。"
+                    "请先把「AI录音思考助手」拖到「应用程序」，从那里打开后再更新")
+        if not os.access(app.parent, os.W_OK):
+            return f"没有权限写入「{app.parent}」，不能自动替换。请下载新版安装盘，手动拖到「应用程序」里替换"
     return ""
 
 
@@ -261,20 +269,54 @@ def start_auto_check(emit) -> None:
 
 # ======================= 安装 =======================
 _MAC_SCRIPT = r"""#!/bin/bash
-# AI 录音思考助手 在线更新：等旧版退出 → 挂载新版 dmg → 换掉 .app → 重新打开
-pid="$1"; dmg="$2"; app="$3"
+# AI 录音思考助手 在线更新（Mac）：等旧版退出 → 挂载新版 dmg → 换掉 .app → 重新打开
+# 失败时把旧版放回原处，在访达里打开新版安装盘并弹窗说明怎么手动替换。日志：~/Library/Logs/AIMind-update.log
+# 测试：AIMIND_UPDATE_NO_OPEN=1 不打开程序、不弹窗
+pid="$1"; dmg="$2"; app="$3"; mnt=""
+log="$HOME/Library/Logs/AIMind-update.log"
+mkdir -p "$(dirname "$log")"; exec >>"$log" 2>&1
+echo "==== $(date) 更新 $app ← $dmg"
 for i in $(seq 1 200); do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+
+fail() {
+  echo "失败：$1"
+  [ -d "$app.old" ] && [ ! -d "$app" ] && mv "$app.old" "$app"
+  rm -rf "$app.new"
+  [ -n "$mnt" ] && hdiutil detach -quiet "$mnt"
+  [ -n "$AIMIND_UPDATE_NO_OPEN" ] && exit 1
+  open "$dmg"
+  tip="已经在访达里打开了新版本的安装盘："
+  tip+="把里面的「AI录音思考助手」拖到「应用程序」，选「替换」即可。"
+  tip+="录音、复盘和设置都不受影响。"
+  osascript - "$1" "$tip" <<'OSA'
+on run argv
+  set m to "自动更新没有完成：" & item 1 of argv & return & return & item 2 of argv
+  display dialog m with title "AI 录音思考助手" buttons {"好"} default button 1 with icon caution
+end run
+OSA
+  exit 1
+}
+
 mnt="$(mktemp -d)"
-if hdiutil attach -nobrowse -quiet -mountpoint "$mnt" "$dmg"; then
-  src="$(ls -d "$mnt"/*.app | head -1)"
-  rm -rf "$app.new" "$app.old"
-  if ditto "$src" "$app.new" && mv "$app" "$app.old" && mv "$app.new" "$app"; then rm -rf "$app.old"
-  else [ -d "$app.old" ] && [ ! -d "$app" ] && mv "$app.old" "$app"; fi
-  hdiutil detach -quiet "$mnt"
-  xattr -cr "$app" 2>/dev/null
-fi
-open "$app"
+hdiutil attach -nobrowse -quiet -mountpoint "$mnt" "$dmg" || { mnt=""; fail "新版安装盘打不开"; }
+src="$(ls -d "$mnt"/*.app 2>/dev/null | head -1)"
+[ -d "$src" ] || fail "安装盘里没有找到程序"
+rm -rf "$app.new" "$app.old"
+ditto "$src" "$app.new" || fail "没有权限写入「$(dirname "$app")」"
+xattr -cr "$app.new" 2>/dev/null
+perm="系统不允许替换旧版本（可能要在「系统设置 → 隐私与安全性 → App 管理」里允许本程序）"
+mv "$app" "$app.old" || fail "$perm"
+mv "$app.new" "$app" || fail "新版本放不进去"
+rm -rf "$app.old"
+hdiutil detach -quiet "$mnt"
+echo "OK"
+[ -z "$AIMIND_UPDATE_NO_OPEN" ] && open "$app"
+exit 0
 """
+
+
+def mac_app_path() -> Path:
+    return Path(sys.executable).resolve().parents[2]          # …/AI录音思考助手.app/Contents/MacOS/AIMind
 
 
 def install(emit, recording: bool, quit_app) -> None:
@@ -296,7 +338,7 @@ def install(emit, recording: bool, quit_app) -> None:
         subprocess.Popen([str(path), "--silent", "--upgrade", "--wait-pid", str(os.getpid()), "--relaunch"],
                          creationflags=flags, close_fds=True, cwd=str(path.parent))
     else:
-        app = Path(sys.executable).resolve().parents[2]          # …/AI录音思考助手.app/Contents/MacOS/AIMind
+        app = mac_app_path()
         script = Path(tempfile.gettempdir()) / "aimind_update.sh"
         script.write_text(_MAC_SCRIPT, encoding="utf-8")
         subprocess.Popen(["/bin/bash", str(script), str(os.getpid()), str(path), str(app)],
