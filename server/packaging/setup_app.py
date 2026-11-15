@@ -108,6 +108,56 @@ if (-not $env:AIMIND_UNINSTALL_QUIET) { [System.Windows.Forms.MessageBox]::Show(
 """
 
 
+def _move(src: Path, dst: Path, wait: float = 15) -> None:
+    """改名；刚退出的程序（含界面子进程）可能还占着文件，等一会儿再试，中途再关一次旧版本"""
+    import time
+    end, killed = time.monotonic() + wait, False
+    while True:
+        try:
+            src.rename(dst)
+            return
+        except OSError:
+            if time.monotonic() > end:
+                raise
+            if not killed and time.monotonic() > end - wait / 2:
+                stop_running()
+                killed = True
+            time.sleep(0.3)
+
+
+def swap_in(stage: Path, target: Path, old: Path) -> None:
+    """把 stage 里的新版本换到 target，旧文件挪到 old。
+
+    不给 target 文件夹本身改名：在线更新时，安装程序（单文件 exe 的外层启动器）和别的进程
+    可能把它当作当前目录，这时 Windows 不许改名（WinError 32）；但挪动里面的文件是可以的。
+    中途失败就全部挪回去，旧版本完好无损。"""
+    if not target.exists():
+        _move(stage, target)
+        return
+    old.mkdir(parents=True, exist_ok=True)
+    out: list[str] = []      # 已挪到 old 的旧文件
+    new: list[str] = []      # 已挪进 target 的新文件
+    try:
+        for p in list(target.iterdir()):
+            _move(p, old / p.name)
+            out.append(p.name)
+        for p in list(stage.iterdir()):
+            _move(p, target / p.name, wait=5)
+            new.append(p.name)
+    except OSError:
+        for n in new:
+            try:
+                (target / n).rename(stage / n)
+            except OSError:
+                pass
+        for n in out:
+            try:
+                (old / n).rename(target / n)
+            except OSError:
+                pass
+        raise
+
+
 def install(target: Path, desktop: bool = True, startmenu: bool = True, autostart: bool = False,
             progress=lambda pct, msg: None) -> None:
     target = Path(target)
@@ -145,30 +195,14 @@ def install(target: Path, desktop: bool = True, startmenu: bool = True, autostar
 
     progress(88, "正在关闭正在运行的旧版本…")
     stop_running()
-    # 当前目录在安装文件夹里时（在线更新时安装程序是旧版程序启动的，继承了它的工作目录），
-    # Windows 不许给这个文件夹改名（WinError 32）。先离开它
-    os.chdir(os.environ.get("TEMP") or target.anchor)
+    os.chdir(os.environ.get("TEMP") or target.anchor)   # 自己别待在安装文件夹里
     shutil.rmtree(old, ignore_errors=True)
-    if target.exists():
-        for attempt in range(30):                       # 刚退出的程序（含界面子进程）可能还占着文件，最多等 15 秒
-            try:
-                target.rename(old)
-                break
-            except OSError as e:
-                if attempt == 10:
-                    stop_running()
-                if attempt == 29:
-                    shutil.rmtree(stage, ignore_errors=True)
-                    raise RuntimeError(f"旧版本的文件还在被占用（{e}）。请关闭程序后再试") from e
-                import time
-                time.sleep(0.5)
     try:
-        stage.rename(target)
-    except OSError:
-        if old.exists() and not target.exists():
-            old.rename(target)                          # 换不上去：把旧版本放回原处
+        swap_in(stage, target, old)
+    except OSError as e:
         shutil.rmtree(stage, ignore_errors=True)
-        raise
+        raise RuntimeError(f"旧版本的文件还在被占用（{e}）。请关闭程序后再试") from e
+    shutil.rmtree(stage, ignore_errors=True)
     shutil.rmtree(old, ignore_errors=True)
 
     progress(93, "正在创建快捷方式…")
