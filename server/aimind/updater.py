@@ -292,8 +292,9 @@ def install(emit, recording: bool, quit_app) -> None:
     emit({"type": "update", **public_state()})
     if key == "windows":
         flags = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP：程序退出后安装程序继续跑
+        # cwd 放到下载目录：不能让安装程序的工作目录落在要被替换的安装文件夹里（会占着它，换不下来）
         subprocess.Popen([str(path), "--silent", "--upgrade", "--wait-pid", str(os.getpid()), "--relaunch"],
-                         creationflags=flags, close_fds=True)
+                         creationflags=flags, close_fds=True, cwd=str(path.parent))
     else:
         app = Path(sys.executable).resolve().parents[2]          # …/AI录音思考助手.app/Contents/MacOS/AIMind
         script = Path(tempfile.gettempdir()) / "aimind_update.sh"

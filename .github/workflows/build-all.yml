@@ -69,6 +69,11 @@ jobs:
           if (Test-Path "$env:TEMP\AIMind-Setup.log") { Get-Content "$env:TEMP\AIMind-Setup.log" -Encoding utf8 | Select-Object -Last 3 | ForEach-Object { [Console]::Out.WriteLine(($_ -replace '[^\x20-\x7e]', '?')) } }
           if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir\AIMind.exe")) { Write-Host "::error::silent install failed ($($p.ExitCode))"; exit 1 }
           Write-Host "installer OK: $((Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB) MB installed"
+          # 模拟在线更新：安装程序的工作目录在安装文件夹里（旧版程序启动它时就是这样），覆盖安装要成功
+          $p = Start-Process $setup -ArgumentList '--silent', '--dir', $dir, '--no-shortcuts' -WorkingDirectory $dir -Wait -PassThru
+          if (Test-Path "$env:TEMP\AIMind-Setup.log") { Get-Content "$env:TEMP\AIMind-Setup.log" -Encoding utf8 | Select-Object -Last 3 | ForEach-Object { [Console]::Out.WriteLine(($_ -replace '[^\x20-\x7e]', '?')) } }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir\AIMind.exe") -or (Test-Path "$dir.old")) { Write-Host "::error::upgrade install failed ($($p.ExitCode))"; exit 1 }
+          Write-Host "upgrade install OK"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows

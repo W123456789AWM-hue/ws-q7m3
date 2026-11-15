@@ -145,14 +145,19 @@ def install(target: Path, desktop: bool = True, startmenu: bool = True, autostar
 
     progress(88, "正在关闭正在运行的旧版本…")
     stop_running()
+    # 当前目录在安装文件夹里时（在线更新时安装程序是旧版程序启动的，继承了它的工作目录），
+    # Windows 不许给这个文件夹改名（WinError 32）。先离开它
+    os.chdir(os.environ.get("TEMP") or target.anchor)
     shutil.rmtree(old, ignore_errors=True)
     if target.exists():
-        for attempt in range(10):                       # 刚退出的程序可能还占着文件，等一下再试
+        for attempt in range(30):                       # 刚退出的程序（含界面子进程）可能还占着文件，最多等 15 秒
             try:
                 target.rename(old)
                 break
             except OSError as e:
-                if attempt == 9:
+                if attempt == 10:
+                    stop_running()
+                if attempt == 29:
                     shutil.rmtree(stage, ignore_errors=True)
                     raise RuntimeError(f"旧版本的文件还在被占用（{e}）。请关闭程序后再试") from e
                 import time
