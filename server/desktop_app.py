@@ -165,14 +165,16 @@ class SplashSound:
         self.proc = None
         try:
             from aimind import config
-            if not config.load().get("splash_sound", True) or os.environ.get("AIMIND_NO_SPLASH_SOUND"):
+            cfg = config.load()
+            if not cfg.get("splash_sound", True) or os.environ.get("AIMIND_NO_SPLASH_SOUND"):
                 return
             from aimind import sounds
-            path = config.DATA_DIR / "cache" / f"splash-sound-{speed:g}-v1.wav"
+            vol = max(0.1, min(1.5, float(cfg.get("splash_sound_volume") or 1)))
+            path = config.DATA_DIR / "cache" / f"splash-sound-{speed:g}-{vol:g}-v1.wav"
             if not path.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(".tmp")
-                tmp.write_bytes(sounds.splash_wav(speed))
+                tmp.write_bytes(sounds.splash_wav(speed, vol))
                 tmp.replace(path)
             self.path = path
         except Exception as e:

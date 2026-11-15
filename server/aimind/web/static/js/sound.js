@@ -5,6 +5,12 @@ import {getJSON} from './api.js';
 
 let ctx = null, buf = null, loading = null, last = 0;
 export let clicksOn = true;
+let volume = 1;            // 设置 → 声音 → 按钮音效音量
+
+function apply(cfg) {
+  clicksOn = cfg?.sound_clicks !== false;
+  volume = Math.min(1.5, Math.max(0.1, Number(cfg?.click_volume) || 1));
+}
 
 const TARGET = 'button, [data-action], [role=button], .switch, input[type=checkbox], select, summary';
 
@@ -23,7 +29,7 @@ export function playClick() {
   if (ctx.state === 'suspended') ctx.resume();
   const src = ctx.createBufferSource();
   const gain = ctx.createGain();
-  gain.gain.value = 0.55;
+  gain.gain.value = 0.55 * volume;
   src.buffer = buf;
   src.playbackRate.value = 0.97 + Math.random() * 0.06;   // 每次音高略有不同，听起来不机械
   src.connect(gain).connect(ctx.destination);
@@ -42,6 +48,6 @@ export function initSound() {
   document.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('button, [role=button]')) playClick();
   }, {capture: true, passive: true});
-  on('config', cfg => { clicksOn = cfg?.sound_clicks !== false; });
-  getJSON('/api/config').then(cfg => { clicksOn = cfg?.sound_clicks !== false; }).catch(() => {});
+  on('config', apply);
+  getJSON('/api/config').then(apply).catch(() => {});
 }

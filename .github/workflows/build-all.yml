@@ -109,9 +109,13 @@ jobs:
           ditto "$(ls -d "$mnt"/*.app | head -1)" "$app"; hdiutil detach -quiet "$mnt"
           touch "$app/Contents/OLD_MARKER"
           "${TMPDIR:-/tmp}/aimind_build_venv/bin/python" -c "from aimind import updater; print(updater._MAC_SCRIPT)" > "$RUNNER_TEMP/up.sh"
-          ok=0; AIMIND_UPDATE_NO_OPEN=1 bash "$RUNNER_TEMP/up.sh" 999999 "$PWD/dist/AIMind-Mac.dmg" "$app" || ok=$?
+          cp dist/AIMind-Mac.dmg "$RUNNER_TEMP/new.dmg"     # 脚本成功后会删掉 dmg，用一份副本
+          ok=0; AIMIND_UPDATE_NO_OPEN=1 bash "$RUNNER_TEMP/up.sh" 999999 "$RUNNER_TEMP/new.dmg" "$app" "${{ needs.version.outputs.v }}" || ok=$?
           tail -4 ~/Library/Logs/AIMind-update.log
-          [ "$ok" = 0 ] && [ -x "$app/Contents/MacOS/AIMind" ] && [ ! -e "$app/Contents/OLD_MARKER" ] && [ ! -e "$app.old" ] \
+          ls -la "$apps"
+          # 换好了、旧标记没了、文件夹里没有多余的东西（含隐藏的临时副本）、安装盘已卸载
+          [ "$ok" = 0 ] && [ -x "$app/Contents/MacOS/AIMind" ] && [ ! -e "$app/Contents/OLD_MARKER" ] \
+            && [ "$(ls -A "$apps")" = "AI录音思考助手.app" ] && ! hdiutil info | grep -q "$RUNNER_TEMP/new.dmg" \
             || { echo "::error::mac online update failed"; exit 1; }
           echo "mac update OK"
       - run: mv dist/AIMind-Mac.dmg "dist/AIMind-${{ needs.version.outputs.v }}-mac-${{ matrix.arch }}.dmg"

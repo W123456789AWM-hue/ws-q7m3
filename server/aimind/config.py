@@ -70,7 +70,9 @@ DEFAULTS: dict = {
     "splash_enabled": True,           # 启动时播放启动动画
     "splash_speed": 1.0,              # 启动动画速度：0.5 = 慢一倍，2 = 快一倍
     "splash_sound": True,             # 启动动画的音效
+    "splash_sound_volume": 1.0,       # 启动音效音量：0.3 很轻 / 0.6 轻 / 1 标准 / 1.4 响
     "sound_clicks": True,             # 界面按钮的点击音效
+    "click_volume": 1.0,              # 按钮音效音量（同上）
     "config_version": 3,
 }
 

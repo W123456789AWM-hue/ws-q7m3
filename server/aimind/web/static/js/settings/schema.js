@@ -8,6 +8,7 @@ const audioMode = c => (c.review_input || 'audio') === 'audio';
 const textMode = c => c.review_input === 'text';
 const interval = c => (c.review_mode || 'interval') !== 'realtime';
 const realtime = c => c.review_mode === 'realtime';
+const VOLUMES = [[0.3, '很轻'], [0.6, '轻'], [1, '标准'], [1.4, '响']];    // 音效音量（相对默认）
 
 export const CATEGORIES = [
   {id: 'general', name: '通用', icon: 'user', color: '#8e8e93', groups: [
@@ -21,6 +22,8 @@ export const CATEGORIES = [
     ]},
     {title: '声音', items: [
       {k: 'sound_clicks', label: '按钮音效', desc: '点按钮、开关时轻轻“嗒”一声', type: 'bool', kw: '音效 声音 点击 静音 提示音'},
+      {k: 'click_volume', label: '按钮音效音量', desc: '启动音效和它的音量在「启动动画」里设置', type: 'seg',
+        when: c => c.sound_clicks !== false, kw: '音量 大声 小声 响度', options: VOLUMES},
     ]},
     {title: '让 AI 更懂你', items: [
       {k: 'about_me', label: '关于我', desc: '你的身份、正在做的事、长期目标。AI 据此推断你的潜在需求（强烈建议填写）', type: 'textarea', kw: '个人 简介 身份 目标'},
@@ -102,6 +105,8 @@ export const CATEGORIES = [
     {title: '桌面程序', items: [
       {k: 'splash_enabled', label: '打开程序时播放启动动画', type: 'bool', kw: '开机 动画 logo'},
       {k: 'splash_sound', label: '启动音效', desc: '和动画一起播放；点动画跳过时声音也会停', type: 'bool', when: c => c.splash_enabled !== false, kw: '音效 声音 静音 音乐'},
+      {k: 'splash_sound_volume', label: '启动音效音量', type: 'seg', options: VOLUMES,
+        when: c => c.splash_enabled !== false && c.splash_sound !== false, kw: '音量 大声 小声 响度'},
       {k: 'splash_speed', label: '动画速度', desc: '1× 约 8 秒；点动画也能直接跳过', type: 'seg', when: c => c.splash_enabled !== false, kw: '快 慢',
         options: [[0.5, '0.5×'], [0.75, '0.75×'], [1, '1×'], [1.5, '1.5×'], [2, '2×'], [3, '3×']]},
       {k: 'splash', label: '预览启动动画', desc: '按上面的速度播放一遍', type: 'preview', when: c => c.splash_enabled !== false},

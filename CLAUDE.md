@@ -43,7 +43,9 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
 - 签名：Ed25519（`aimind/ed25519.py` 纯 Python）。公钥写在 version.py；私钥在 GitHub 仓库密钥 `UPDATE_SIGNING_KEY`，
   本机备份在 `%LOCALAPPDATA%\ai_mind_build\release-signing-key.txt`。**私钥丢了 = 已装的程序再也收不到更新**，不要提交进仓库。
 - 程序端 `aimind/updater.py`：检查（验签）→ 下载（核对大小 + sha256）→ Windows 调安装程序 `--silent --upgrade --wait-pid --relaunch`、
-  Mac 用脚本替换 .app。录音中不更新。手机 App 通过电脑的 `/api/update/mobile`、`/api/update/file/…` 更新。
+  Mac 用脚本 `_MAC_SCRIPT` 替换 .app（隐藏的临时副本、核对版本号、失败弹窗并打开 dmg，日志 ~/Library/Logs/AIMind-update.log）。
+  **更新脚本是旧版程序执行的**：改了它，要等用户装上新版之后的下一次更新才生效。
+  云端每次打包都会真的跑一遍：Windows 覆盖安装（工作目录在安装文件夹里）、Mac 用脚本替换 .app。录音中不更新。手机 App 通过电脑的 `/api/update/mobile`、`/api/update/file/…` 更新。
 - 本机测试更新：设置项 `update_manifest_url` 指向自己搭的发布目录（见 tests/test_e2e.py 的 test_online_update_*）。
 
 ## 用户反馈
@@ -78,7 +80,10 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
   Windows 用 winsound、Mac 用 afplay；用户点掉动画时声音也停。
 - 网页按钮音效：`js/sound.js`（Web Audio）。手机：`ui/sfx.dart`（audioplayers），所有 Material 按钮通过主题的
   `ClickSplashFactory` 自动出声，自定义的 `Pressable` / `Segmented` 自己调 `Sfx.tap()`；录音时一律不响。
-- 设置：电脑 `sound_clicks`、`splash_sound`；手机 `soundClicks`、`splashSound`。
+- 设置：电脑 `sound_clicks`、`click_volume`、`splash_sound`、`splash_sound_volume`（音量 0.3–1.4，启动音效按音量另存缓存）；
+  手机 `soundClicks`、`splashSound`。
+- `tests/test_units.py::test_web_scripts_have_no_syntax_errors` 用 node 检查所有界面脚本（含 splash.html 内联脚本）的语法，
+  本机没装 node 时跳过、云端会跑：0.10.1–0.10.5 的 splash.html 重复声明变量，Mac 启动动画和音效整段失效过。
 
 ## 复盘层级
 

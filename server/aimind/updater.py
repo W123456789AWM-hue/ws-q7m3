@@ -269,20 +269,34 @@ def start_auto_check(emit) -> None:
 
 # ======================= 安装 =======================
 _MAC_SCRIPT = r"""#!/bin/bash
-# AI 录音思考助手 在线更新（Mac）：等旧版退出 → 挂载新版 dmg → 换掉 .app → 重新打开
+# AI 录音思考助手 在线更新（Mac）：等旧版退出 → 挂载新版 dmg → 换掉 .app → 核对版本 → 重新打开
 # 失败时把旧版放回原处，在访达里打开新版安装盘并弹窗说明怎么手动替换。日志：~/Library/Logs/AIMind-update.log
-# 测试：AIMIND_UPDATE_NO_OPEN=1 不打开程序、不弹窗
-pid="$1"; dmg="$2"; app="$3"; mnt=""
+# 参数：旧版进程号 dmg路径 .app路径 新版本号。测试：AIMIND_UPDATE_NO_OPEN=1 不打开程序、不弹窗
+trap '' HUP
+pid="$1"; dmg="$2"; app="$3"; want="$4"; mnt=""
+dir="$(dirname "$app")"
+# 临时副本用点开头的名字：访达里看不见，万一中断也不会在桌面 / 应用程序里多出一个程序
+new="$dir/.aimind-update-new.app"; old="$dir/.aimind-update-old.app"
 log="$HOME/Library/Logs/AIMind-update.log"
 mkdir -p "$(dirname "$log")"; exec >>"$log" 2>&1
-echo "==== $(date) 更新 $app ← $dmg"
-for i in $(seq 1 200); do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+echo "==== $(date) 更新到 $want：$app ← $dmg"
 
+# 等旧版退出；等不到就强制结束（否则 open 只会把还在运行的旧版切到前台）
+for i in $(seq 1 100); do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+kill -0 "$pid" 2>/dev/null && { echo "旧版没退出，强制结束"; kill -9 "$pid"; sleep 1; }
+pkill -9 -f "$app/Contents/MacOS/" 2>/dev/null && sleep 1     # 同一个程序的其他实例
+
+ver() { /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$1/Contents/Info.plist" 2>/dev/null; }
+detach() {
+  [ -n "$mnt" ] || return 0
+  for i in 1 2 3 4 5; do hdiutil detach -quiet "$mnt" && { mnt=""; return 0; }; sleep 1; done
+  hdiutil detach -quiet -force "$mnt"; mnt=""
+}
 fail() {
   echo "失败：$1"
-  [ -d "$app.old" ] && [ ! -d "$app" ] && mv "$app.old" "$app"
-  rm -rf "$app.new"
-  [ -n "$mnt" ] && hdiutil detach -quiet "$mnt"
+  [ -d "$old" ] && [ ! -d "$app" ] && mv "$old" "$app"
+  rm -rf "$new" "$old"
+  detach
   [ -n "$AIMIND_UPDATE_NO_OPEN" ] && exit 1
   open "$dmg"
   tip="已经在访达里打开了新版本的安装盘："
@@ -297,20 +311,25 @@ OSA
   exit 1
 }
 
+rm -rf "$new" "$old" "$app.new" "$app.old"        # 上次中断留下的（旧版脚本用的是 .app.new / .app.old）
 mnt="$(mktemp -d)"
-hdiutil attach -nobrowse -quiet -mountpoint "$mnt" "$dmg" || { mnt=""; fail "新版安装盘打不开"; }
+hdiutil attach -nobrowse -noautoopen -quiet -mountpoint "$mnt" "$dmg" || { mnt=""; fail "新版安装盘打不开"; }
 src="$(ls -d "$mnt"/*.app 2>/dev/null | head -1)"
 [ -d "$src" ] || fail "安装盘里没有找到程序"
-rm -rf "$app.new" "$app.old"
-ditto "$src" "$app.new" || fail "没有权限写入「$(dirname "$app")」"
-xattr -cr "$app.new" 2>/dev/null
+ditto "$src" "$new" || fail "没有权限写入「$dir」"
+detach
+xattr -cr "$new" 2>/dev/null
+[ -z "$want" ] || [ "$(ver "$new")" = "$want" ] || fail "安装盘里的版本（$(ver "$new")）不对"
 perm="系统不允许替换旧版本（可能要在「系统设置 → 隐私与安全性 → App 管理」里允许本程序）"
-mv "$app" "$app.old" || fail "$perm"
-mv "$app.new" "$app" || fail "新版本放不进去"
-rm -rf "$app.old"
-hdiutil detach -quiet "$mnt"
-echo "OK"
-[ -z "$AIMIND_UPDATE_NO_OPEN" ] && open "$app"
+mv "$app" "$old" || fail "$perm"
+mv "$new" "$app" || fail "新版本放不进去"
+rm -rf "$old"
+[ -z "$want" ] || [ "$(ver "$app")" = "$want" ] || fail "换完后版本不对（$(ver "$app")）"
+rm -f "$dmg"
+ls="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+"$ls" -f "$app" 2>/dev/null       # 让程序坞、聚焦搜索认新版
+echo "OK $(ver "$app")"
+[ -z "$AIMIND_UPDATE_NO_OPEN" ] && open -n "$app"
 exit 0
 """
 
@@ -338,10 +357,10 @@ def install(emit, recording: bool, quit_app) -> None:
         subprocess.Popen([str(path), "--silent", "--upgrade", "--wait-pid", str(os.getpid()), "--relaunch"],
                          creationflags=flags, close_fds=True, cwd=str(path.parent))
     else:
-        app = mac_app_path()
+        app, latest = mac_app_path(), public_state()["latest"]
         script = Path(tempfile.gettempdir()) / "aimind_update.sh"
         script.write_text(_MAC_SCRIPT, encoding="utf-8")
-        subprocess.Popen(["/bin/bash", str(script), str(os.getpid()), str(path), str(app)],
+        subprocess.Popen(["/bin/bash", str(script), str(os.getpid()), str(path), str(app), latest],
                          start_new_session=True, close_fds=True)
     emit({"type": "status", "msg": "正在安装新版本，程序会自动重新打开…"})
     quit_app()

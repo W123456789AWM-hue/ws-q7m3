@@ -25,14 +25,14 @@
     document.body.classList.add('out');
     setTimeout(() => window.pywebview?.api?.done(skipped === true), 350);
   }
-  const started = () => { try { window.pywebview?.api?.started?.(); } catch (e) {} };   // 第一帧出来：开始放音效
+  const soundStart = () => { try { window.pywebview?.api?.started?.(); } catch (e) {} };   // 第一帧出来：开始放音效
   document.body.addEventListener('click', () => finish(true));
   document.addEventListener('keydown', () => finish(true));
 
   function plainImg() {                               // 原速播放
     const img = new Image();
     img.draggable = false;
-    img.onload = () => { started(); setTimeout(finish, DURATION + HOLD); };
+    img.onload = () => { soundStart(); setTimeout(finish, DURATION + HOLD); };
     img.onerror = finish;
     img.src = 'splash.webp?' + Date.now();
     document.body.appendChild(img);
@@ -47,7 +47,7 @@
     const cv = document.createElement('canvas');
     cv.width = first.displayWidth; cv.height = first.displayHeight;
     document.body.appendChild(cv);
-    started();
+    soundStart();
     const ctx = cv.getContext('2d');
     let due = performance.now();
     for (let i = 0; i < n && !finished; i++) {
@@ -68,9 +68,9 @@
     else plainImg();
   }
   // 速度由桌面程序通过 pywebview 传进来（等它准备好，最多等 1 秒）
-  let started = false;
+  let begun = false;
   const go = async () => {
-    if (started) return; started = true;
+    if (begun) return; begun = true;
     try { if (window.pywebview?.api?.speed) speed = clamp(await window.pywebview.api.speed()); } catch (e) {}
     begin();
   };

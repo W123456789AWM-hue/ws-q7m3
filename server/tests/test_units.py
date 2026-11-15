@@ -366,6 +366,44 @@ def test_desktop_splash_sound_respects_setting(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "load", lambda: {**config.DEFAULTS, "splash_sound": False})
     assert desktop_app.SplashSound(1.5).path is None
     desktop_app.SplashSound(1.5).stop()              # 没开声音时停也不出错
+    # 音量：设置不同的音量用不同的缓存文件，“轻”的峰值明显更小
+    peaks = {}
+    for vol in (0.3, 1.4):
+        monkeypatch.setattr(config, "load", lambda v=vol: {**config.DEFAULTS, "splash_sound_volume": v})
+        p = desktop_app.SplashSound(1.5).path
+        peaks[vol] = np.abs(np.frombuffer(p.read_bytes()[44:], "<i2")).max()
+    assert peaks[0.3] < peaks[1.4] * 0.3 and peaks[1.4] <= 32767
+
+
+def test_web_scripts_have_no_syntax_errors(tmp_path):
+    """界面脚本没有语法错误。（0.10.1 起 splash.html 里重复声明了 started，整段脚本不运行：
+    Mac 的启动动画和音效都没了，要等兜底计时器才进主窗口。）需要 node；本机没装时跳过，云端有"""
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("没有 node")
+    static = Path(__file__).resolve().parent.parent / "aimind" / "web" / "static"
+    files = []
+    for html in static.rglob("*.html"):
+        inline = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html.read_text("utf-8"), re.S)
+        for i, code in enumerate(inline):
+            f = tmp_path / f"{html.stem}-{i}.mjs"
+            f.write_text(code, "utf-8")
+            files.append(f)
+    for js in static.rglob("*.js"):
+        f = tmp_path / (js.relative_to(static).as_posix().replace("/", "_") + ".mjs")
+        f.write_text(js.read_text("utf-8"), "utf-8")
+        files.append(f)
+    assert files
+    bad = []
+    for f in files:
+        r = subprocess.run([node, "--check", str(f)], capture_output=True, text=True, encoding="utf-8")
+        if r.returncode:
+            bad.append(f"{f.name}: {r.stderr.strip()[-300:]}")
+    assert not bad, "\n".join(bad)
 
 
 def test_file_writes_survive_brief_windows_locks(monkeypatch, tmp_path):

@@ -191,5 +191,6 @@ def click_wav() -> bytes:
     return _wav(click())
 
 
-def splash_wav(speed: float = 1.0) -> bytes:
-    return _wav(splash(speed))
+def splash_wav(speed: float = 1.0, volume: float = 1.0) -> bytes:
+    """volume：设置里的启动音效音量（0.3 很轻 … 1.4 响），按比例缩放，超出部分削顶"""
+    return _wav(splash(speed) * max(0.0, min(1.5, volume)))
