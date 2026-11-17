@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
+import '../core/endpoints.dart' show ApiException;
 import 'update_section.dart' show appVersion;
 
-/// 设置页里的「反馈」：写好后发给电脑，由电脑转发给开发者（手机里不存机器人地址）
+/// 设置页里的「反馈」：连着电脑时发给电脑转发（带上电脑端的诊断信息）；
+/// 不连电脑、或电脑连不上时，手机直接发给开发者（core/feedback.dart），发不出去先存手机、联网后自动重发
 class FeedbackSection extends StatefulWidget {
   const FeedbackSection({super.key, required this.app});
   final AppState app;
@@ -41,10 +43,36 @@ class _FeedbackSectionState extends State<FeedbackSection> {
   }
 
   Future<void> _load() async {
-    try {
-      final items = await widget.app.api.feedbackHistory();
-      if (mounted) setState(() => _items = items);
-    } catch (_) {/* 没连上电脑 / 电脑端是旧版 */}
+    final app = widget.app;
+    var remote = <Map<String, dynamic>>[];
+    if (!app.standalone && app.configured) {
+      try {
+        remote = await app.api.feedbackHistory();
+      } catch (_) {/* 没连上电脑 / 电脑端是旧版 */}
+    }
+    if (mounted) setState(() => _items = _merge(app.feedback.history(), remote));
+  }
+
+  /// 手机直接发的 + 电脑上记的，按时间排（新的在前）
+  static List<Map<String, dynamic>> _merge(List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
+    final seen = <String>{};
+    final all = [
+      for (final x in [...a, ...b])
+        if (seen.add('${x['id']}')) x
+    ]..sort((x, y) => ((y['time'] as num?) ?? 0).compareTo((x['time'] as num?) ?? 0));
+    return all;
+  }
+
+  /// 手机直接发时附带的诊断信息（不含 Key、录音和复盘内容）
+  String _phoneDiag() {
+    final app = widget.app;
+    final s = app.settings;
+    return [
+      '发送设备：App $appVersion · ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+      '用法：${s.standalone ? '手机独立复盘（${s.google ? 'Google' : s.aiEndpoint.replaceFirst(RegExp(r'^https?://'), '')}）' : '连接电脑'}',
+      if (!s.standalone) '电脑：${app.configured ? '已填地址，这次没连上' : '还没填电脑地址'}',
+      if (app.viewError.isNotEmpty) '最近的错误：${app.viewError}',
+    ].join('\n');
   }
 
   /// 从相册选截图：系统自带的图片选择器，不用申请相册权限；先缩到长边 1600 再发
@@ -74,26 +102,56 @@ class _FeedbackSectionState extends State<FeedbackSection> {
       _sending = true;
       _msg = '';
     });
-    final s = widget.app.settings;
+    final app = widget.app;
+    final s = app.settings;
     try {
-      final images = [for (final f in _images) base64Encode(await f.readAsBytes())];
-      final r = await widget.app.api.sendFeedback({
-        'kind': _kind,
-        'text': text,
-        'contact': _contact.text.trim(),
-        'include_diag': _diag,
-        'source': s.deviceName,
-        'client': 'App $appVersion · ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
-        if (images.isNotEmpty) 'images': images,
-      });
+      final bytes = [for (final f in _images) await f.readAsBytes()];
+      Map<String, dynamic>? r;
+      var direct = true;
+      if (!app.standalone && app.configured) {
+        try {
+          r = await app.api.sendFeedback({
+            'kind': _kind,
+            'text': text,
+            'contact': _contact.text.trim(),
+            'include_diag': _diag,
+            'source': s.deviceName,
+            'client': 'App $appVersion · ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+            if (bytes.isNotEmpty) 'images': [for (final b in bytes) base64Encode(b)],
+          });
+          direct = false;
+        } on ApiException catch (e) {
+          // 电脑回了明确的错误（比如内容不合规）就照实说；电脑是旧版没有反馈功能（404）时改为手机直接发
+          if (e.status != 404) rethrow;
+        } catch (_) {/* 电脑连不上：手机直接发 */}
+      }
+      if (direct) {
+        if (!app.feedback.configured) {
+          throw Exception(app.standalone ? '这个版本没有内置反馈通道，请更新 App' : '连不上电脑，这个版本也没有内置反馈通道');
+        }
+        r = await app.feedback.submit(
+          kind: _kind,
+          text: text,
+          contact: _contact.text.trim(),
+          source: s.deviceName,
+          version: appVersion,
+          diag: _diag ? _phoneDiag() : '',
+          images: bytes,
+        );
+      }
+      final item = r!;
       _text.clear();
       setState(() {
         _images.clear();
-        _msg = r['status'] == 'sent' ? '已送达，谢谢你的反馈！' : '电脑暂时没发出去，已存好，联网后会自动重发';
-        _items = [r, ..._items.where((x) => x['id'] != r['id'])];
+        _msg = item['status'] == 'sent'
+            ? '已送达，谢谢你的反馈！'
+            : direct
+                ? '暂时没发出去（${item['error']}），已存在手机上，联网后会自动重发'
+                : '电脑暂时没发出去，已存好，联网后会自动重发';
+        _items = _merge([item], _items);
       });
     } catch (e) {
-      setState(() => _msg = '发送失败：$e（要先连上电脑）');
+      setState(() => _msg = '发送失败：${'$e'.replaceFirst('Exception: ', '')}');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -112,7 +170,11 @@ class _FeedbackSectionState extends State<FeedbackSection> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('反馈', style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('遇到问题或想要新功能，直接告诉开发者（经电脑转发）', style: TextStyle(color: t.colorScheme.outline)),
+        Text(
+            widget.app.standalone || !widget.app.configured
+                ? '遇到问题或想要新功能，直接告诉开发者（不用连电脑）'
+                : '遇到问题或想要新功能，直接告诉开发者（连着电脑时经电脑转发，连不上就由手机直接发）',
+            style: TextStyle(color: t.colorScheme.outline)),
         const SizedBox(height: 8),
         SegmentedButton<String>(
           segments: [for (final e in _kinds.entries) ButtonSegment(value: e.key, label: Text(e.value))],
@@ -166,7 +228,7 @@ class _FeedbackSectionState extends State<FeedbackSection> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('附带诊断信息'),
-          subtitle: const Text('版本、系统、电脑端最近的日志（密钥会自动抹掉，不含录音和复盘内容）'),
+          subtitle: const Text('版本、系统、最近的错误（连着电脑时还有电脑端日志；密钥会自动抹掉，不含录音和复盘内容）'),
           value: _diag,
           onChanged: (v) => setState(() => _diag = v),
         ),

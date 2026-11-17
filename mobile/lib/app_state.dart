@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
 import 'android_bridge.dart';
+import 'core/feedback.dart';
 import 'core/api.dart';
 import 'core/endpoints.dart';
 import 'core/local_engine.dart';
@@ -38,6 +39,8 @@ class AppState extends ChangeNotifier {
   late final LocalEngine engine;
   late final ServerApi api;
   late final MicRecorder mic;
+  /// 反馈：连着电脑时经电脑转发；不连电脑（或电脑连不上）时手机直接发
+  late final FeedbackOutbox feedback = FeedbackOutbox(Directory('${dataDir.path}/feedback'));
 
   /// 电脑端的当前状态（/api/phone/view）
   Map<String, dynamic>? view;
@@ -95,10 +98,12 @@ class AppState extends ChangeNotifier {
     unawaited(Sfx.init());
     uploader.startTimer();
     unawaited(uploader.kick()); // 上次没传完的接着传
+    unawaited(feedback.retryPending()); // 上次没发出去的反馈
     await _checkNetwork();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       _tick++;
       if (_tick % 4 == 0) unawaited(_checkNetwork());
+      if (_tick % 75 == 0) unawaited(feedback.retryPending()); // 每 5 分钟重发一次没发出去的反馈
       // 用移动网络时少刷新一点，省流量
       if (standalone) {
         unawaited(engine.kick()); // 上次没处理完的接着处理

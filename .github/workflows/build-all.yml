@@ -143,9 +143,17 @@ jobs:
       - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
       - run: flutter pub get
       - run: flutter test
-      - run: |
+      - env:
+          # 反馈通道：手机不连电脑时直接发到飞书（和电脑端同一套 GitHub 密钥）
+          FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
+          FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
+          FEEDBACK_APP_ID: ${{ secrets.FEEDBACK_APP_ID }}
+          FEEDBACK_APP_SECRET: ${{ secrets.FEEDBACK_APP_SECRET }}
+        run: |
           V=${{ needs.version.outputs.v }}
-          flutter build apk --release --split-per-abi --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V
+          FB=(--dart-define=FEEDBACK_WEBHOOK="$FEEDBACK_WEBHOOK" --dart-define=FEEDBACK_SECRET="$FEEDBACK_SECRET"
+              --dart-define=FEEDBACK_APP_ID="$FEEDBACK_APP_ID" --dart-define=FEEDBACK_APP_SECRET="$FEEDBACK_APP_SECRET")
+          flutter build apk --release --split-per-abi --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V "${FB[@]}"
           cd build/app/outputs/flutter-apk
           mv app-arm64-v8a-release.apk "AIMind-$V-android-arm64.apk"
           mv app-armeabi-v7a-release.apk "AIMind-$V-android-armv7.apk"
@@ -167,9 +175,16 @@ jobs:
       - run: flutter create --org com.example --project-name ai_mind --platforms=android,ios .
       - run: bash scripts/setup_ios.sh
       - run: flutter pub get
-      - run: |
+      - env:
+          FEEDBACK_WEBHOOK: ${{ secrets.FEEDBACK_WEBHOOK }}
+          FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}
+          FEEDBACK_APP_ID: ${{ secrets.FEEDBACK_APP_ID }}
+          FEEDBACK_APP_SECRET: ${{ secrets.FEEDBACK_APP_SECRET }}
+        run: |
           V=${{ needs.version.outputs.v }}
-          flutter build ios --release --no-codesign --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V
+          FB=(--dart-define=FEEDBACK_WEBHOOK="$FEEDBACK_WEBHOOK" --dart-define=FEEDBACK_SECRET="$FEEDBACK_SECRET"
+              --dart-define=FEEDBACK_APP_ID="$FEEDBACK_APP_ID" --dart-define=FEEDBACK_APP_SECRET="$FEEDBACK_APP_SECRET")
+          flutter build ios --release --no-codesign --build-name=$V --build-number=${{ github.run_number }} --dart-define=APP_VERSION=$V "${FB[@]}"
           mkdir Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
           zip -qry "AIMind-$V-ios-unsigned.ipa" Payload

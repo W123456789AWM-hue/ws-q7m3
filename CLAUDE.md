@@ -51,7 +51,10 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
 ## 用户反馈
 
 - 设置「反馈」（`js/feedback.js`）和手机 App 设置页（`feedback_section.dart`）→ `POST /api/feedback` → `aimind/feedback.py` 发到开发者的飞书群（自定义机器人，带签名）。
-  手机不直接连飞书，由电脑转发（机器人地址只在电脑端程序里）。
+  手机连着电脑时经电脑转发（带电脑端诊断信息）；不连电脑、电脑连不上或电脑是旧版（404）时，手机直接发
+  （`mobile/lib/core/feedback.dart`，同样的卡片和签名，发不出去存手机 `feedback/`，打开 App 时和每 5 分钟重发）。
+  手机里的机器人地址和密钥由云端打包 `--dart-define=FEEDBACK_*` 从同一套 GitHub 密钥传入；本机打包没有，只能经电脑发。
+  （打进安装包的密钥能被人从安装包里扒出来——电脑端一直如此，最坏是有人往群里发垃圾消息，那时到飞书里重置机器人密钥并更新 GitHub 密钥即可。）
 - 机器人地址 / 签名密钥：GitHub 仓库密钥 `FEEDBACK_WEBHOOK` / `FEEDBACK_SECRET`，打包时 `aimind.spec` 写进程序；
   本机打包用 `%LOCALAPPDATA%\ai_mind_build\feedback_target.json`；测试用环境变量 `AIMIND_FEEDBACK_WEBHOOK` / `AIMIND_FEEDBACK_SECRET`。**不要提交进仓库。**
 - 发不出去存 `data/feedback/`，每 5 分钟重发。诊断信息经 `redact()` 抹掉密钥，不带录音和复盘内容。
