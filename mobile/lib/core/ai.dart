@@ -56,6 +56,12 @@ class AiClient {
   AiClient(this.s);
   final AppSettings s;
 
+  static const busyCodes = {500, 502, 503, 504};
+  static const geminiFallback = 'gemini-flash-lite-latest';
+
+  /// 服务器临时过载时的重试间隔（测试里改短）
+  static List<Duration> busyWaits = const [Duration(seconds: 4), Duration(seconds: 12), Duration(seconds: 25)];
+
   Future<String> _post(Map<String, dynamic> body, Duration timeout, {bool audio = false}) async {
     if (s.aiApiKey.isEmpty) throw AiException('还没填写 ${s.vendorName} 的 API Key（设置 → 手机独立复盘）');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
@@ -71,12 +77,33 @@ class AiClient {
         return (resp.statusCode, await resp.transform(utf8.decoder).join().timeout(timeout));
       }
 
-      var (code, text) = await send(body);
+      /// 对方临时过载（5xx，比如 Gemini 的 “high demand”）：等一会儿重试；
+      /// Gemini 几次都忙，最后换备用模型试一次（备用模型不能用就保留原来的错误）
+      Future<(int, String)> sendRetry(Map<String, dynamic> b) async {
+        var (code, text) = await send(b);
+        for (var i = 0; i < busyWaits.length && busyCodes.contains(code); i++) {
+          await Future<void>.delayed(busyWaits[i]);
+          var bb = b;
+          if (i == busyWaits.length - 1 && s.google && b['model'] != geminiFallback) {
+            bb = Map.of(b)..['model'] = geminiFallback;
+          }
+          final (c2, t2) = await send(bb);
+          if (!identical(bb, b) && (c2 == 400 || c2 == 403 || c2 == 404)) break;
+          (code, text) = (c2, t2);
+        }
+        return (code, text);
+      }
+
+      var (code, text) = await sendRetry(body);
       if (code == 400 && !(audio && text.toLowerCase().contains('audio'))) {
         // 有的模型不收 temperature / max_tokens，去掉再试
-        (code, text) = await send(Map.of(body)
+        (code, text) = await sendRetry(Map.of(body)
           ..remove('temperature')
           ..remove('max_tokens'));
+      }
+      if (busyCodes.contains(code)) {
+        throw AiException('${s.vendorName} 那边现在太忙（HTTP $code，服务器临时过载，不是你的设置问题），'
+            '已自动重试几次仍不行。一般过几分钟就好，点「重试」即可');
       }
       if (code == 401) throw AiException('${s.vendorName} 的 API Key 不对或已失效');
       if (code == 413) throw AiException('一次发送的录音太大，请把复盘间隔调短一些');

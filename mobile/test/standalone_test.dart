@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ai_mind/core/adpcm.dart';
+import 'package:ai_mind/core/ai.dart';
 import 'package:ai_mind/core/audio.dart';
 import 'package:ai_mind/core/local_engine.dart';
 import 'package:ai_mind/core/settings.dart';
@@ -24,7 +25,8 @@ Uint8List _noise(double seconds, double amp) {
 /// 假的 AI 接口：收到录音就按标注里的段落编号返回听写和复盘；收到文字就返回一份总复盘
 class FakeAi {
   late HttpServer server;
-  int audioCalls = 0, textCalls = 0, failNext = 0;
+  int audioCalls = 0, textCalls = 0, failNext = 0, failCode = 403;
+  final models = <String>[];
   final List<int> audioParts = [];
   String get url => 'http://127.0.0.1:${server.port}/v1';
 
@@ -41,9 +43,10 @@ class FakeAi {
       }
 
       if (req.headers.value('authorization') != 'Bearer sk-test') return reply(401, {'error': 'bad key'});
+      models.add('${body['model']}');
       if (failNext > 0) {
         failNext--;
-        return reply(500, {'error': 'boom'});
+        return reply(failCode, {'error': 'boom'});
       }
       final user = (body['messages'] as List).last['content'];
       if (user is List) {
@@ -134,7 +137,7 @@ void main() {
     s = engine.session(sid)!;
     final bad = (s['reviews'] as List).last as Map;
     expect(bad['status'], 'error');
-    expect('${bad['error']}', contains('HTTP 500'));
+    expect('${bad['error']}', contains('HTTP 403'));
     expect(engine.pendingBytes(), greaterThan(0));
     expect((s['paragraphs'] as List).last['status'], 'live'); // 界面上显示“等待 AI 听写”
     expect(Uploader(spoolDir, st).pending(), isEmpty); // 暂存的片都处理掉了
@@ -202,6 +205,23 @@ void main() {
     // 设置能存能读
     final back = AppSettings()..apply(jsonDecode(jsonEncode((s..aiVendor = 'google').toJson())) as Map<String, dynamic>);
     expect((back.aiVendor, back.googleKey, back.googleModel), ('google', 'AIzaTEST', 'gemini-3.6-flash'));
+  });
+
+  test('AI 那边太忙（503）：自动重试；一直忙最后换备用模型；全不行提示“太忙”', () async {
+    final ai = FakeAi()..failCode = 503;
+    await ai.start();
+    AiClient.busyWaits = const [Duration.zero, Duration.zero, Duration.zero];
+    final st = AppSettings()
+      ..standalone = true
+      ..aiBaseUrl = ai.url
+      ..aiKey = 'sk-test';
+    final c = AiClient(st);
+    ai.failNext = 1;
+    expect(await c.chat('s', 'u'), contains('总复盘'));
+    expect(ai.models.length, 2);
+    ai.failNext = 4;
+    await expectLater(c.chat('s', 'u'), throwsA(predicate((e) => '$e'.contains('太忙'))));
+    await ai.server.close(force: true);
   });
 
   test('压缩过的录音片能还原', () {

@@ -67,7 +67,38 @@ def client_for(base: str) -> httpx.Client:
     return _proxied[p]
 
 
+GEMINI_FALLBACK = "gemini-flash-lite-latest"   # 主模型太忙（503）时最后换它试一次：不同的算力池，一般有空
+BUSY_CODES = (500, 502, 503, 504)
+BUSY_WAITS = (4.0, 12.0, 25.0)                 # 服务器临时过载时，隔几秒再试（测试里会改成 0）
+
+
+def post_retry(client: httpx.Client, url: str, body: dict, **kw) -> httpx.Response:
+    """发请求；对方临时过载（5xx，比如 Gemini 的 “high demand”）就等一会儿重试。
+    Gemini 重试几次还忙，最后换备用模型试一次；备用模型不能用就返回原来的错误"""
+    import time
+    r = client.post(url, json=body, **kw)
+    for i, wait in enumerate(BUSY_WAITS):
+        if r.status_code not in BUSY_CODES:
+            return r
+        time.sleep(wait)
+        b = body
+        if i == len(BUSY_WAITS) - 1 and is_gemini(url) and body.get("model") != GEMINI_FALLBACK:
+            b = {**body, "model": GEMINI_FALLBACK}
+        r2 = client.post(url, json=b, **kw)
+        if b is not body and r2.status_code in (400, 403, 404):
+            return r
+        r = r2
+    return r
+
+
+def busy_msg(who: str, r: httpx.Response) -> str:
+    return (f"{who} 那边现在太忙（HTTP {r.status_code}，服务器临时过载，不是你的设置问题），"
+            "已自动重试几次仍不行。一般过几分钟就好，点「重试」即可")
+
+
 def _raise(r: httpx.Response, what: str):
+    if r.status_code in BUSY_CODES:
+        raise RuntimeError(busy_msg(what.replace(" 调用", "").replace("调用", ""), r))
     if r.status_code >= 300:
         raise RuntimeError(f"{what}失败 HTTP {r.status_code}: {r.text[:300]}")
 
@@ -117,9 +148,9 @@ def chat(cfg: dict, system: str, user: str, max_tokens: int = 4000) -> str:
         # Gemini 3 关不掉“思考”，思考也占输出额度：调到最省，额度放宽，免得复盘被截断
         body.update(reasoning_effort="low", max_tokens=max(max_tokens, 16000))
     client = client_for(base)
-    r = client.post(url, headers=headers, json=body)
+    r = post_retry(client, url, body, headers=headers)
     if r.status_code == 400:  # 部分推理模型不收 temperature / max_tokens
-        r = client.post(url, headers=headers, json={"model": cfg["llm_model"], "messages": msgs})
+        r = post_retry(client, url, {"model": cfg["llm_model"], "messages": msgs}, headers=headers)
     _raise(r, f"{vendor_name(base)} 调用" if is_gemini(base) else "AI 调用")
     usage.record(cfg["llm_model"], r.json().get("usage"), "text")
     return (r.json()["choices"][0]["message"]["content"] or "").strip()

@@ -16,14 +16,17 @@ import numpy as np
 from ..audio import SR
 from . import prompts, usage
 from .llm import (
+    BUSY_CODES,
     GEMINI_BASE,
     GEMINI_MAX_AUDIO_MIN,
     TIMEOUT,
+    busy_msg,
     chat,
     client_for,
     gemini_model,
     is_gemini,
     parse_json,
+    post_retry,
     repair_json,
     vendor_name,
 )
@@ -142,14 +145,16 @@ def call_audio(cfg: dict, system: str, header: str, groups: list[dict],
     headers = {"Authorization": f"Bearer {key}", "content-type": "application/json"}
     url = f"{base}/chat/completions"
     client = client_for(base)
-    r = client.post(url, headers=headers, json=_body(base, model, msgs, max_tokens), timeout=LONG_TIMEOUT)
+    r = post_retry(client, url, _body(base, model, msgs, max_tokens), headers=headers, timeout=LONG_TIMEOUT)
     if r.status_code == 400 and "audio" not in r.text.lower():
         # 有的模型不收 temperature / max_tokens，去掉再试
         body = {"model": model, "messages": msgs}
         if not is_gemini(base):
             body["modalities"] = ["text"]
-        r = client.post(url, headers=headers, json=body, timeout=LONG_TIMEOUT)
+        r = post_retry(client, url, body, headers=headers, timeout=LONG_TIMEOUT)
     who = vendor_name(base)
+    if r.status_code in BUSY_CODES:
+        raise RuntimeError(busy_msg(who, r))
     if r.status_code == 413:
         raise RuntimeError("一次发送的录音太大，请在设置里把「每次最多发送多少分钟录音」调小")
     if r.status_code == 401:
@@ -257,9 +262,10 @@ def test_audio(cfg: dict) -> str:
     body = _body(base, model, msgs, 2000)
     body.pop("temperature", None)
     body.pop("max_tokens", None)
-    r = client_for(base).post(f"{base}/chat/completions", timeout=TIMEOUT,
-                              headers={"Authorization": f"Bearer {key}", "content-type": "application/json"},
-                              json=body)
+    r = post_retry(client_for(base), f"{base}/chat/completions", body, timeout=TIMEOUT,
+                   headers={"Authorization": f"Bearer {key}", "content-type": "application/json"})
+    if r.status_code in BUSY_CODES:
+        raise RuntimeError(busy_msg(vendor_name(base), r))
     if r.status_code >= 300:
         raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
     return f"AI 能听到录音（{model}）：{(r.json()['choices'][0]['message'].get('content') or '').strip()[:80]}"

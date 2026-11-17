@@ -513,3 +513,35 @@ def test_google_uses_system_proxy(monkeypatch):
     monkeypatch.setattr(urllib.request, "getproxies", lambda: {"https": "http://127.0.0.1:7890"})
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
     assert llm.client_for(llm.GEMINI_BASE) is llm.HTTP
+
+
+def test_busy_server_retries_then_falls_back(monkeypatch):
+    """Gemini 返回 503 “high demand”：自动等一会儿重试；一直忙就最后换备用模型；全不行给好懂的提示"""
+    from aimind.review import llm
+
+    class Resp:
+        def __init__(self, code):
+            self.status_code, self.text = code, '{"error": {"code": %d}}' % code
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+    seq, models = [], []
+
+    class FakeClient:
+        def post(self, url, headers=None, json=None, timeout=None):
+            models.append(json["model"])
+            return Resp(seq.pop(0))
+
+    monkeypatch.setattr(llm, "BUSY_WAITS", (0, 0, 0))
+    monkeypatch.setattr(llm, "client_for", lambda base: FakeClient())
+    monkeypatch.setattr(llm.usage, "record", lambda *a, **k: None)
+    cfg = {"llm_provider": "google", "google_api_key": "AIzaTEST", "llm_model": ""}
+
+    seq[:] = [503, 200]                        # 忙一次，第二次好了
+    assert llm.chat(cfg, "s", "u") == "ok" and models == [llm.GEMINI_MODEL] * 2
+    seq[:], models[:] = [503, 503, 503, 200], []   # 一直忙：最后一次换备用模型
+    assert llm.chat(cfg, "s", "u") == "ok" and models[-1] == llm.GEMINI_FALLBACK
+    seq[:] = [503, 503, 503, 404]              # 备用模型也不能用：报原来的“太忙”
+    with pytest.raises(RuntimeError, match="太忙"):
+        llm.chat(cfg, "s", "u")
