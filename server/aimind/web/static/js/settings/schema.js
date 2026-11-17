@@ -8,7 +8,8 @@ const audioMode = c => (c.review_input || 'audio') === 'audio';
 const textMode = c => c.review_input === 'text';
 const interval = c => (c.review_mode || 'interval') !== 'realtime';
 const realtime = c => c.review_mode === 'realtime';
-const VOLUMES = [[0.3, '很轻'], [0.6, '轻'], [1, '标准'], [1.4, '响']];    // 音效音量（相对默认）
+const google = c => c.audio_vendor === 'google';
+const VOLUMES =[[0.3, '很轻'], [0.6, '轻'], [1, '标准'], [1.4, '响']];    // 音效音量（相对默认）
 
 export const CATEGORIES = [
   {id: 'general', name: '通用', icon: 'user', color: '#8e8e93', groups: [
@@ -33,22 +34,30 @@ export const CATEGORIES = [
   ]},
 
   {id: 'ai', name: 'AI 服务', icon: 'brain', color: '#bf5af2', groups: [
-    {title: 'AI 听录音（OpenAI）', items: [
+    {title: 'AI 听录音', items: [
       {k: 'review_input', label: 'AI 怎么拿到内容', type: 'select', kw: '模式 本地识别 文字模式',
         options: [['audio', '直接听录音（推荐，能听出语气）'], ['text', '先在本机识别成文字再交给 AI']]},
-      {k: 'audio_api_key', label: 'OpenAI API Key', desc: '在 platform.openai.com 的 API keys 页面生成', type: 'password', kw: '密钥 key openai'},
-      {k: 'audio_model', label: '听录音的模型', desc: '默认 gpt-audio-1.5', type: 'text', when: audioMode, kw: 'gpt audio 模型'},
+      {k: 'audio_vendor', label: '用哪家的 AI', desc: '两家都能直接听录音、听出语气', type: 'seg', when: audioMode,
+        kw: '服务商 谷歌 google gemini openai 厂商', options: [['openai', 'OpenAI'], ['google', 'Google Gemini']]},
+      {k: 'audio_api_key', label: 'OpenAI API Key', desc: '在 platform.openai.com 的 API keys 页面生成', type: 'password',
+        when: c => !google(c) || !audioMode(c), kw: '密钥 key openai'},
+      {k: 'google_api_key', label: 'Google API Key', desc: '在 aistudio.google.com 点「Get API key」生成。国内要开代理（程序会自动用系统代理）',
+        type: 'password', when: c => google(c) || c.llm_provider === 'google', kw: '密钥 key google gemini 谷歌'},
+      {k: 'audio_model', label: '听录音的模型', desc: '留空用默认：OpenAI 是 gpt-audio-1.5，Google 是 gemini-3.8-flash', type: 'text', when: audioMode, kw: 'gpt audio gemini 模型'},
       {k: 'audio_trim_silence', label: '发送前去掉多余的静音', desc: '只去掉每句话前后的空白，省 10% 左右的 token，不影响内容', type: 'bool', when: audioMode, kw: '省钱 token 静音'},
       {k: 'audio', label: '测试 AI 能不能听到录音', type: 'test'},
-      {k: 'audio_base_url', label: '接口地址', desc: '默认 https://api.openai.com/v1，一般不用改', type: 'text', adv: true, kw: 'url 代理 base'},
-      {k: 'audio_max_min', label: '每次最多发送多少分钟录音', desc: '超过会分几次听再合并。报“录音太大”时调小', type: 'number', adv: true, when: audioMode},
+      {k: 'audio_base_url', label: '接口地址', desc: '默认 https://api.openai.com/v1，一般不用改', type: 'text', adv: true, kw: 'url 代理 base',
+        when: c => !google(c)},
+      {k: 'audio_max_min', label: '每次最多发送多少分钟录音', desc: '超过会分几次听再合并。报“录音太大”时调小（Google 最多 6 分钟）', type: 'number', adv: true, when: audioMode},
     ]},
-    {title: '文字 AI（总复盘、日 / 月 / 年复盘）', note: '不填就用上面的 OpenAI', items: [
-      {k: 'llm_provider', label: '接口类型', type: 'select', kw: 'deepseek 硅基流动 claude anthropic ollama',
-        options: [['openai', 'OpenAI 兼容（DeepSeek / 硅基流动 / 通义 / Ollama…）'], ['anthropic', 'Anthropic（Claude）']]},
-      {k: 'llm_base_url', label: '接口地址', desc: '硅基流动 https://api.siliconflow.cn/v1；本机 Ollama http://127.0.0.1:11434/v1', type: 'text', kw: 'url'},
-      {k: 'llm_api_key', label: 'API Key', desc: '本机 Ollama 不用填', type: 'password', kw: '密钥'},
-      {k: 'llm_model', label: '模型名', desc: '从服务商的模型列表里复制完整名字', type: 'text'},
+    {title: '文字 AI（总复盘、日 / 月 / 年复盘）', note: '不填就用上面听录音的 AI', items: [
+      {k: 'llm_provider', label: '接口类型', type: 'select', kw: 'deepseek 硅基流动 claude anthropic ollama google gemini 谷歌',
+        options: [['openai', 'OpenAI 兼容（DeepSeek / 硅基流动 / 通义 / Ollama…）'], ['anthropic', 'Anthropic（Claude）'],
+                  ['google', 'Google Gemini']]},
+      {k: 'llm_base_url', label: '接口地址', desc: '硅基流动 https://api.siliconflow.cn/v1；本机 Ollama http://127.0.0.1:11434/v1', type: 'text', kw: 'url',
+        when: c => c.llm_provider !== 'google'},
+      {k: 'llm_api_key', label: 'API Key', desc: '本机 Ollama 不用填', type: 'password', kw: '密钥', when: c => c.llm_provider !== 'google'},
+      {k: 'llm_model', label: '模型名', desc: '从服务商的模型列表里复制完整名字。Google 留空用 gemini-3.8-flash', type: 'text'},
       {k: 'llm', label: '测试文字 AI', type: 'test'},
     ]},
     {title: '本地识别', when: textMode, items: [

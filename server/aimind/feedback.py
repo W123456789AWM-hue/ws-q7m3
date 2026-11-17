@@ -79,6 +79,7 @@ def images_configured() -> bool:
 # ======================= 诊断信息（脱敏） =======================
 _SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),                       # OpenAI 等的 API Key
+    re.compile(r"AIza[A-Za-z0-9_\-]{20,}"),                     # Google 的 API Key
     re.compile(r"github_pat_[A-Za-z0-9_]{10,}"),
     re.compile(r"(?i)(bearer|token|key|secret|password|口令|密钥)([\"'\s:=：]+)[^\s\"',}]{4,}"),
     re.compile(r"\b[A-Za-z0-9+/_\-]{32,}={0,2}"),                # 长串（可能是密钥 / 口令）

@@ -24,6 +24,9 @@ class AppSettings {
 
   // ---- 手机独立复盘（不连电脑，手机直接把录音发给 AI） ----
   bool standalone = false;
+  String aiVendor = 'openai'; // openai（含其他兼容接口）/ google（Gemini）
+  String googleKey = ''; // Google AI Studio 的 API Key
+  String googleModel = ''; // 留空 = gemini-3.8-flash（听录音和文字都用它）
   String aiBaseUrl = 'https://api.openai.com/v1';
   String aiKey = '';
   String aiModel = 'gpt-audio-1.5'; // 能听录音的模型
@@ -58,6 +61,9 @@ class AppSettings {
         'chunkSec': chunkSec,
         'maxSpoolMb': maxSpoolMb,
         'standalone': standalone,
+        'aiVendor': aiVendor,
+        'googleKey': googleKey,
+        'googleModel': googleModel,
         'aiBaseUrl': aiBaseUrl,
         'aiKey': aiKey,
         'aiModel': aiModel,
@@ -101,6 +107,9 @@ class AppSettings {
     chunkSec = i('chunkSec', chunkSec).clamp(5, 60);
     maxSpoolMb = i('maxSpoolMb', maxSpoolMb).clamp(100, 50000);
     standalone = b('standalone', standalone);
+    aiVendor = s('aiVendor', aiVendor) == 'google' ? 'google' : 'openai';
+    googleKey = s('googleKey', googleKey).trim();
+    googleModel = s('googleModel', googleModel).trim();
     aiBaseUrl = s('aiBaseUrl', aiBaseUrl).trim().replaceAll(RegExp(r'/+$'), '');
     if (aiBaseUrl.isEmpty) aiBaseUrl = 'https://api.openai.com/v1';
     aiKey = s('aiKey', aiKey).trim();
@@ -150,4 +159,20 @@ class AppSettings {
     final tmp = File('${f.path}.tmp')..writeAsStringSync(jsonEncode(toJson()));
     tmp.renameSync(f.path);
   }
+
+  // ---- 手机独立复盘实际用的接口（选了 Google 就换成它的 OpenAI 兼容接口） ----
+  static const geminiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
+  static const geminiModel = 'gemini-3.8-flash'; // 稳定版，能直接听音频（2026-11）
+  static const geminiMaxSec = 6 * 60; // Google 一次请求最大 20MB：16kHz WAV 转 base64 后约 7 分钟
+
+  bool get google => aiVendor == 'google';
+  String get vendorName => google ? 'Google' : 'AI';
+  String get aiEndpoint => google ? geminiBase : aiBaseUrl;
+  String get aiApiKey => google ? googleKey : aiKey;
+  String get aiListenModel {
+    if (google) return googleModel.toLowerCase().startsWith('gemini') ? googleModel : geminiModel;
+    return aiModel.toLowerCase().startsWith('gemini') && !aiBaseUrl.contains('googleapis.com') ? 'gpt-audio-1.5' : aiModel;
+  }
+
+  String get aiChatModel => google || aiTextModel.isEmpty ? aiListenModel : aiTextModel;
 }

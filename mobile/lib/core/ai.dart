@@ -1,4 +1,4 @@
-/// 手机直接调用 AI（OpenAI 兼容的 Chat Completions 接口）：听录音做复盘、文字做总复盘。
+/// 手机直接调用 AI（OpenAI 兼容的 Chat Completions 接口；Google Gemini 也走它的兼容接口）：听录音做复盘、文字做总复盘。
 /// 只在「手机独立复盘」模式下使用；连电脑的模式里这些都由电脑做。
 library;
 
@@ -57,12 +57,12 @@ class AiClient {
   final AppSettings s;
 
   Future<String> _post(Map<String, dynamic> body, Duration timeout, {bool audio = false}) async {
-    if (s.aiKey.isEmpty) throw AiException('还没填写 AI 的 API Key（设置 → 手机独立复盘）');
+    if (s.aiApiKey.isEmpty) throw AiException('还没填写 ${s.vendorName} 的 API Key（设置 → 手机独立复盘）');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
       Future<(int, String)> send(Map<String, dynamic> b) async {
-        final req = await client.postUrl(Uri.parse('${s.aiBaseUrl}/chat/completions'));
-        req.headers.set('Authorization', 'Bearer ${s.aiKey}');
+        final req = await client.postUrl(Uri.parse('${s.aiEndpoint}/chat/completions'));
+        req.headers.set('Authorization', 'Bearer ${s.aiApiKey}');
         final bytes = utf8.encode(jsonEncode(b));
         req.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
         req.contentLength = bytes.length;
@@ -78,7 +78,7 @@ class AiClient {
           ..remove('temperature')
           ..remove('max_tokens'));
       }
-      if (code == 401) throw AiException('API Key 不对或已失效');
+      if (code == 401) throw AiException('${s.vendorName} 的 API Key 不对或已失效');
       if (code == 413) throw AiException('一次发送的录音太大，请把复盘间隔调短一些');
       if (code == 429) throw AiException('额度不足或请求太频繁（HTTP 429）：${_cut(text)}');
       if (code >= 300) throw AiException('AI 接口返回 HTTP $code：${_cut(text)}');
@@ -117,8 +117,8 @@ class AiClient {
         },
       ],
     ];
-    return _post({
-      'model': s.aiModel,
+    return _post(_tune({
+      'model': s.aiListenModel,
       'modalities': ['text'],
       'messages': [
         {'role': 'system', 'content': system},
@@ -126,19 +126,28 @@ class AiClient {
       ],
       'temperature': 0.8,
       'max_tokens': 12000,
-    }, const Duration(minutes: 5), audio: true);
+    }, 32000), const Duration(minutes: 5), audio: true);
   }
 
   /// 文字对话（总复盘、日 / 月 / 年复盘）
-  Future<String> chat(String system, String user) => _post({
-        'model': s.aiTextModel.isEmpty ? s.aiModel : s.aiTextModel,
+  Future<String> chat(String system, String user) => _post(_tune({
+        'model': s.aiChatModel,
         'messages': [
           {'role': 'system', 'content': system},
           {'role': 'user', 'content': user},
         ],
         'temperature': 0.9,
         'max_tokens': 4000,
-      }, const Duration(minutes: 3));
+      }, 16000), const Duration(minutes: 3));
+
+  /// Google Gemini：不认 modalities；关不掉“思考”且思考也占输出额度，调到最省、额度放宽（免得复盘被截断）
+  Map<String, dynamic> _tune(Map<String, dynamic> body, int geminiMaxTokens) {
+    if (!s.aiEndpoint.contains('generativelanguage.googleapis.com')) return body;
+    return Map.of(body)
+      ..remove('modalities')
+      ..['reasoning_effort'] = 'low'
+      ..['max_tokens'] = geminiMaxTokens;
+  }
 
   /// 设置页的测试按钮：发 1.5 秒提示音，确认 Key、模型都能用
   Future<String> test() async {
@@ -149,6 +158,6 @@ class AiClient {
       bd.setInt16(i * 2, ((i * 440 * 2 ~/ kSampleRate).isEven ? 6000 : -6000), Endian.little);
     }
     final out = await listen('', '这是一段测试音频。请用一句中文描述你听到了什么。', [AudioPart('【测试】', bd.buffer.asUint8List())]);
-    return 'AI 能听到录音（${s.aiModel}）：${out.length > 80 ? out.substring(0, 80) : out}';
+    return 'AI 能听到录音（${s.aiListenModel}）：${out.length > 80 ? out.substring(0, 80) : out}';
   }
 }

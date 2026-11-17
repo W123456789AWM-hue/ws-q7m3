@@ -33,7 +33,8 @@ from .session import Session, clock, with_pause
 from .stt.transcriber import Transcriber, engine_key
 
 IMPORT_DEVICE = "import"
-LIVE_KEYS = ("review_input", "audio_base_url", "audio_api_key", "audio_model", "audio_max_min",
+LIVE_KEYS = ("review_input", "audio_vendor", "google_api_key", "audio_base_url", "audio_api_key", "audio_model",
+             "audio_max_min",
              "realtime_min_sec", "review_min_sec", "realtime_min_chars", "review_min_chars",
              "review_mode", "review_interval_min", "pause_close_sec", "max_paragraph_sec",
              "about_me", "extra_instructions", "glossary", "llm_provider", "llm_base_url",

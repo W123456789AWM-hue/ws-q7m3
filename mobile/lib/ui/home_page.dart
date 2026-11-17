@@ -236,7 +236,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
         final left = (n['seconds_left'] as num?)?.toInt() ?? 0;
         out.add(('下次复盘 ${fmtDuration(Duration(seconds: left))} 后 · 新录音 ${n['new_chars']} 秒', false));
       }
-      if (app.settings.aiKey.isEmpty) out.add(('还没填 AI 的 API Key（设置 → 手机独立复盘）', true));
+      if (app.settings.aiApiKey.isEmpty) out.add(('还没填 ${app.settings.vendorName} 的 API Key（设置 → 手机独立复盘）', true));
       if ('${s?['summary_error'] ?? ''}'.isNotEmpty) out.add(('总复盘没做成：${s?['summary_error']}', true));
       return out;
     }

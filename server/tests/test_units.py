@@ -441,3 +441,75 @@ def test_file_writes_survive_brief_windows_locks(monkeypatch, tmp_path):
     # 一直被占着：附带的日志写不进去也只是记一笔，不抛错
     fails["open"] = 99
     assert fsutil.append_jsonl(log, [{"text": "第三句"}]) is False
+
+
+def test_google_gemini_vendor(monkeypatch, tmp_path):
+    """选 Google：听录音和文字 AI 都走 Gemini 的 OpenAI 兼容接口，用 Google 的 Key 和 gemini 模型；
+    不发 modalities、思考调到最省；录音每次最多 6 分钟（一次请求最大 20MB）；换回 OpenAI 时模型名恢复"""
+    from aimind.review import listen, llm
+    sent = []
+
+    class Resp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"title": "t", "summary": "s"}'}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+
+    class FakeClient:
+        def post(self, url, headers=None, json=None, timeout=None):
+            sent.append((url, headers, json))
+            return Resp()
+
+    monkeypatch.setattr(llm, "client_for", lambda base: FakeClient())
+    monkeypatch.setattr(listen, "client_for", lambda base: FakeClient())
+    monkeypatch.setattr(llm.usage, "record", lambda *a, **k: None)
+    monkeypatch.setattr(listen.usage, "record", lambda *a, **k: None)
+
+    cfg = {"audio_vendor": "google", "google_api_key": "AIzaTEST", "audio_model": "gpt-audio-1.5",
+           "audio_api_key": "sk-openai", "llm_provider": "openai", "llm_model": "", "llm_api_key": ""}
+    assert listen.audio_endpoint(cfg) == (llm.GEMINI_BASE, "AIzaTEST", llm.GEMINI_MODEL)
+    # 听录音
+    (tmp_path / "clips").mkdir()
+    (tmp_path / "clips" / "a.pcm").write_bytes((np.sin(np.arange(16000) / 5) * 8000).astype(np.int16).tobytes())
+    listen.call_audio(cfg, "sys", "head", [{"pid": 1, "clock": "10:00:00", "clips": ["a.pcm"]}], tmp_path)
+    url, headers, body = sent[-1]
+    assert url == llm.GEMINI_BASE + "/chat/completions" and headers["Authorization"] == "Bearer AIzaTEST"
+    assert body["model"] == llm.GEMINI_MODEL and "modalities" not in body and body["reasoning_effort"] == "low"
+    assert any(p.get("type") == "input_audio" for p in body["messages"][1]["content"])
+    # 文字 AI 没单独配：借用听录音的 Google
+    llm.chat(cfg, "sys", "hi")
+    assert sent[-1][0].startswith(llm.GEMINI_BASE) and sent[-1][2]["model"] == llm.GEMINI_MODEL
+    # 文字 AI 选 Google、Key 没单独填：用 Google Key；模型名不是 gemini 的换成默认
+    t = llm.text_cfg({**cfg, "audio_vendor": "openai", "llm_provider": "google", "llm_model": "deepseek-chat"})
+    assert (t["llm_base_url"], t["llm_api_key"], t["llm_model"]) == (llm.GEMINI_BASE, "AIzaTEST", llm.GEMINI_MODEL)
+    # 换回 OpenAI：gemini 模型名不会被带过去
+    o = listen.audio_endpoint({**cfg, "audio_vendor": "openai", "audio_model": "gemini-3.8-flash"})
+    assert o == ("https://api.openai.com/v1", "sk-openai", "gpt-audio-1.5")
+    # 每次最多发多少录音：设置是 8 分钟，Google 压到 6 分钟，OpenAI 照旧
+    groups = [{"pid": 1, "clock": "", "clips": []}]
+    monkeypatch.setattr(listen, "call_audio", lambda *a, **k: '{"title": "t"}')
+    caps = []
+    monkeypatch.setattr(listen, "split_groups", lambda g, max_sec: caps.append(max_sec) or [g])
+    listen.audio_review({**cfg, "audio_max_min": 8}, groups, tmp_path, "", [])
+    listen.audio_review({**cfg, "audio_vendor": "openai", "audio_max_min": 8}, groups, tmp_path, "", [])
+    assert caps == [360.0, 480.0]
+
+
+def test_google_uses_system_proxy(monkeypatch):
+    """httpx 不认系统代理：连 Google 时自动用系统代理（国内直连不通）；别的接口、设了环境变量时不动"""
+    import urllib.request
+
+    from aimind.review import llm
+    for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"https": "http://127.0.0.1:7890"})
+    c = llm.client_for(llm.GEMINI_BASE)
+    assert c is not llm.HTTP and llm.client_for(llm.GEMINI_BASE) is c       # 复用同一个
+    assert llm.client_for("https://api.openai.com/v1") is llm.HTTP
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {})
+    assert llm.client_for(llm.GEMINI_BASE) is llm.HTTP
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"https": "http://127.0.0.1:7890"})
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+    assert llm.client_for(llm.GEMINI_BASE) is llm.HTTP

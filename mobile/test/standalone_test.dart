@@ -183,6 +183,27 @@ void main() {
     tmp.deleteSync(recursive: true);
   });
 
+  test('选 Google：用 Gemini 的接口、Google 的 Key 和 gemini 模型；换回来不串', () {
+    final s = AppSettings()
+      ..aiKey = 'sk-openai'
+      ..aiModel = 'gpt-audio-1.5'
+      ..aiTextModel = 'deepseek-chat'
+      ..aiVendor = 'google'
+      ..googleKey = 'AIzaTEST';
+    expect(s.aiEndpoint, AppSettings.geminiBase);
+    expect(s.aiApiKey, 'AIzaTEST');
+    expect(s.aiListenModel, AppSettings.geminiModel);
+    expect(s.aiChatModel, AppSettings.geminiModel); // 文字也用 Gemini，不用 deepseek
+    s.googleModel = 'gemini-3.6-flash';
+    expect(s.aiListenModel, 'gemini-3.6-flash');
+    s.aiVendor = 'openai';
+    expect((s.aiEndpoint, s.aiApiKey, s.aiListenModel, s.aiChatModel),
+        ('https://api.openai.com/v1', 'sk-openai', 'gpt-audio-1.5', 'deepseek-chat'));
+    // 设置能存能读
+    final back = AppSettings()..apply(jsonDecode(jsonEncode((s..aiVendor = 'google').toJson())) as Map<String, dynamic>);
+    expect((back.aiVendor, back.googleKey, back.googleModel), ('google', 'AIzaTEST', 'gemini-3.6-flash'));
+  });
+
   test('压缩过的录音片能还原', () {
     final pcm = _noise(1, 0.2);
     final back = adpcmDecode(adpcmEncode(pcm));

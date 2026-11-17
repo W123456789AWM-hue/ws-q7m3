@@ -247,8 +247,9 @@ class LocalEngine {
   Future<bool> _review(Json s, String kind) async {
     final batch = <Json>[];
     num total = 0;
+    final limit = settings.google ? AppSettings.geminiMaxSec : maxReviewSec; // Google 一次请求最大 20MB
     for (final p in _pending(s)) {
-      if (batch.isNotEmpty && total + (p['sec'] as num) > maxReviewSec) break;
+      if (batch.isNotEmpty && total + (p['sec'] as num) > limit) break;
       batch.add(p);
       total += p['sec'] as num;
     }

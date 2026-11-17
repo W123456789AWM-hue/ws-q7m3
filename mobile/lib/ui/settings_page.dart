@@ -108,6 +108,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _aiKey = TextEditingController(text: s.aiKey);
   late final _aiModel = TextEditingController(text: s.aiModel);
   late final _aiText = TextEditingController(text: s.aiTextModel);
+  late final _gKey = TextEditingController(text: s.googleKey);
+  late final _gModel = TextEditingController(text: s.googleModel);
   late final _every = TextEditingController(text: '${s.reviewEveryMin}');
   late final _about = TextEditingController(text: s.aboutMe);
   late final _glossary = TextEditingController(text: s.glossary);
@@ -132,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _token.dispose();
     _name.dispose();
     _margin.dispose();
-    for (final c in [_aiUrl, _aiKey, _aiModel, _aiText, _every, _about, _glossary, _extra]) {
+    for (final c in [_aiUrl, _aiKey, _aiModel, _aiText, _gKey, _gModel, _every, _about, _glossary, _extra]) {
       c.dispose();
     }
     for (final c in _rc.values) {
@@ -151,6 +153,8 @@ class _SettingsPageState extends State<SettingsPage> {
     s.aiKey = _aiKey.text;
     s.aiModel = _aiModel.text;
     s.aiTextModel = _aiText.text;
+    s.googleKey = _gKey.text;
+    s.googleModel = _gModel.text;
     s.reviewEveryMin = int.tryParse(_every.text.trim()) ?? s.reviewEveryMin;
     s.aboutMe = _about.text;
     s.glossary = _glossary.text;
@@ -429,11 +433,27 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(color: context.c.label2, fontSize: 13, height: 1.45)),
             ),
             if (s.standalone) ...[
-              _title('手机独立复盘', 'Key 只保存在这台手机上，只发给你填的接口地址'),
-              _text(_aiUrl, '接口地址（OpenAI 兼容）', hint: '填到 /v1，默认 https://api.openai.com/v1'),
-              _text(_aiKey, 'API Key', secret: true, hint: '在接口提供方的网站上生成，自己粘贴到这里'),
-              _text(_aiModel, '听录音的模型', hint: '要能直接听音频，默认 gpt-audio-1.5'),
-              _text(_aiText, '文字模型（可不填）', hint: '总复盘、日 / 月 / 年复盘用；不填就用上面的模型'),
+              _title('手机独立复盘', 'Key 只保存在这台手机上，只发给你选的 AI 服务'),
+              Segmented(
+                labels: const ['OpenAI 等', 'Google Gemini'],
+                index: s.google ? 1 : 0,
+                onChanged: (i) {
+                  _applyLocal();
+                  setState(() => s.aiVendor = i == 1 ? 'google' : 'openai');
+                  app.saveSettings();
+                },
+              ),
+              const SizedBox(height: 4),
+              if (s.google) ...[
+                _text(_gKey, 'Google API Key', secret: true,
+                    hint: '在 aistudio.google.com 点「Get API key」生成，自己粘贴到这里。国内需要开 VPN'),
+                _text(_gModel, '模型（可不填）', hint: '不填用 ${AppSettings.geminiModel}，听录音和总复盘都用它'),
+              ] else ...[
+                _text(_aiUrl, '接口地址（OpenAI 兼容）', hint: '填到 /v1，默认 https://api.openai.com/v1'),
+                _text(_aiKey, 'API Key', secret: true, hint: '在接口提供方的网站上生成，自己粘贴到这里'),
+                _text(_aiModel, '听录音的模型', hint: '要能直接听音频，默认 gpt-audio-1.5'),
+                _text(_aiText, '文字模型（可不填）', hint: '总复盘、日 / 月 / 年复盘用；不填就用上面的模型'),
+              ],
               _btn('测试 AI 能不能听到录音', _aiTest),
               _text(_every, '每隔多少分钟复盘一次', number: true, hint: '1–240。停止录音时会把剩下的复盘完，再做整场总复盘'),
               _text(_about, '关于我（强烈建议填写）', hint: '你的身份、正在做的事、长期目标。AI 据此推断你的潜在需求', lines: 4),

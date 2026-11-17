@@ -85,6 +85,15 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
 - `tests/test_units.py::test_web_scripts_have_no_syntax_errors` 用 node 检查所有界面脚本（含 splash.html 内联脚本）的语法，
   本机没装 node 时跳过、云端会跑：0.10.1–0.10.5 的 splash.html 重复声明变量，Mac 启动动画和音效整段失效过。
 
+## AI 服务商
+
+- 听录音：`audio_vendor` = openai（含其他 OpenAI 兼容接口）/ google。文字 AI：`llm_provider` = openai / anthropic / google。
+- Google Gemini 走它的 OpenAI 兼容接口（`llm.GEMINI_BASE`，听录音也是 input_audio），和 OpenAI 共用代码；差别都在 `llm.is_gemini()` 分支：
+  不发 modalities、`reasoning_effort=low` 且放宽 max_tokens（Gemini 3 关不掉思考，思考占输出额度）、
+  每次最多 6 分钟录音（一次请求最大 20MB）、没设代理环境变量时用系统代理（`llm.client_for`，国内直连不通）。
+- Google Key 单独存 `google_api_key`（手机 `googleKey`），切换服务商不会覆盖 OpenAI 的 Key；模型名不是 gemini 开头时自动用默认 `gemini-3.8-flash`。
+- 手机端同一套逻辑在 `AppSettings.aiEndpoint / aiApiKey / aiListenModel / aiChatModel` 和 `AiClient._tune`。
+
 ## 复盘层级
 
 - 小复盘（阶段复盘）：录音中按 `review_mode`（realtime / interval）触发，engine.py。

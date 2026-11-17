@@ -1,4 +1,4 @@
-"""AI 直接听录音做复盘（OpenAI gpt-audio 系列，Chat Completions 接口的 input_audio）
+"""AI 直接听录音做复盘（OpenAI gpt-audio 系列 / Google Gemini，Chat Completions 接口的 input_audio）
 
 - 每个段落作为一段音频发过去，前面附一行【段落 #编号 · 时间 · 时长】，AI 返回听写 + 复盘
 - 录音太长、一次发不完时：先分几次让 AI 听写并记下语气线索，再基于这些用文字做一次复盘
@@ -15,18 +15,48 @@ import numpy as np
 
 from ..audio import SR
 from . import prompts, usage
-from .llm import HTTP, TIMEOUT, chat, parse_json, repair_json
+from .llm import (
+    GEMINI_BASE,
+    GEMINI_MAX_AUDIO_MIN,
+    TIMEOUT,
+    chat,
+    client_for,
+    gemini_model,
+    is_gemini,
+    parse_json,
+    repair_json,
+    vendor_name,
+)
 
 LONG_TIMEOUT = httpx.Timeout(300.0, connect=15.0)
 
 
 def audio_endpoint(cfg: dict) -> tuple[str, str, str]:
-    """(接口地址, Key, 模型)。Key 没填时，如果文字 AI 也是 OpenAI，就借用它的 Key"""
+    """(接口地址, Key, 模型)。audio_vendor=google 用 Google Gemini（单独的 Key）；
+    OpenAI 的 Key 没填时，如果文字 AI 也是 OpenAI，就借用它的 Key"""
+    if cfg.get("audio_vendor") == "google":
+        return GEMINI_BASE, (cfg.get("google_api_key") or "").strip(), gemini_model(cfg.get("audio_model"))
     base = (cfg.get("audio_base_url") or "https://api.openai.com/v1").strip().rstrip("/")
     key = (cfg.get("audio_api_key") or "").strip()
     if not key and "api.openai.com" in (cfg.get("llm_base_url") or ""):
         key = (cfg.get("llm_api_key") or "").strip()
-    return base, key, (cfg.get("audio_model") or "gpt-audio-1.5").strip()
+    model = (cfg.get("audio_model") or "").strip()
+    if not model or (model.lower().startswith("gemini") and not is_gemini(base)):   # 从 Google 换回来时
+        model = "gpt-audio-1.5"
+    return base, key, model
+
+
+def _key_missing(base: str) -> str:
+    return (f"还没填写 {vendor_name(base)} 的 API Key（设置 → AI 服务 → AI 听录音）" if is_gemini(base)
+            else "还没填写 OpenAI 的 API Key（设置 → AI 服务 → AI 听录音）")
+
+
+def _body(base: str, model: str, msgs: list, max_tokens: int) -> dict:
+    if is_gemini(base):
+        # Gemini：不认 modalities；关不掉“思考”且思考也占输出额度，调到最省、额度放宽
+        return {"model": model, "messages": msgs, "temperature": 0.8, "reasoning_effort": "low",
+                "max_tokens": max(max_tokens, 32000)}
+    return {"model": model, "modalities": ["text"], "messages": msgs, "temperature": 0.8, "max_tokens": max_tokens}
 
 
 def wav_b64(pcm: np.ndarray) -> str:
@@ -92,7 +122,7 @@ def call_audio(cfg: dict, system: str, header: str, groups: list[dict],
     """groups: [{"pid", "clock", "clips": [...]}]，每组作为一段音频"""
     base, key, model = audio_endpoint(cfg)
     if not key:
-        raise RuntimeError("还没填写 OpenAI 的 API Key（设置 → AI 听录音）")
+        raise RuntimeError(_key_missing(base))
     content: list[dict] = [{"type": "text", "text": header}]
     compress = bool(cfg.get("audio_trim_silence", True))
     sent = saved = 0.0
@@ -111,19 +141,21 @@ def call_audio(cfg: dict, system: str, header: str, groups: list[dict],
     msgs = [{"role": "system", "content": system}, {"role": "user", "content": content}]
     headers = {"Authorization": f"Bearer {key}", "content-type": "application/json"}
     url = f"{base}/chat/completions"
-    body = {"model": model, "modalities": ["text"], "messages": msgs,
-            "temperature": 0.8, "max_tokens": max_tokens}
-    r = HTTP.post(url, headers=headers, json=body, timeout=LONG_TIMEOUT)
+    client = client_for(base)
+    r = client.post(url, headers=headers, json=_body(base, model, msgs, max_tokens), timeout=LONG_TIMEOUT)
     if r.status_code == 400 and "audio" not in r.text.lower():
         # 有的模型不收 temperature / max_tokens，去掉再试
-        body = {"model": model, "modalities": ["text"], "messages": msgs}
-        r = HTTP.post(url, headers=headers, json=body, timeout=LONG_TIMEOUT)
+        body = {"model": model, "messages": msgs}
+        if not is_gemini(base):
+            body["modalities"] = ["text"]
+        r = client.post(url, headers=headers, json=body, timeout=LONG_TIMEOUT)
+    who = vendor_name(base)
     if r.status_code == 413:
         raise RuntimeError("一次发送的录音太大，请在设置里把「每次最多发送多少分钟录音」调小")
     if r.status_code == 401:
-        raise RuntimeError("OpenAI 的 API Key 不对或已失效")
+        raise RuntimeError(f"{who} 的 API Key 不对或已失效")
     if r.status_code == 429:
-        raise RuntimeError(f"OpenAI 额度不足或请求太频繁（HTTP 429）：{r.text[:200]}")
+        raise RuntimeError(f"{who} 额度不足或请求太频繁（HTTP 429）：{r.text[:200]}")
     if r.status_code >= 300:
         raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
     j = r.json()
@@ -175,7 +207,10 @@ def _transcripts(data: dict | None) -> dict[int, str]:
 def audio_review(cfg: dict, groups: list[dict], session_dir: Path, span: str,
                  prev: list[dict], progress=lambda m: None) -> tuple[dict, dict[int, str]]:
     """返回 (复盘结果, {段落编号: 听写文字})"""
-    max_sec = max(60.0, float(cfg.get("audio_max_min") or 8) * 60)
+    max_min = float(cfg.get("audio_max_min") or 8)
+    if is_gemini(audio_endpoint(cfg)[0]):          # Google 一次请求最大 20MB
+        max_min = min(max_min, GEMINI_MAX_AUDIO_MIN)
+    max_sec = max(60.0, max_min * 60)
     header = prompts.audio_header(span, prev, cfg.get("about_me", ""),
                                   cfg.get("extra_instructions", ""), cfg.get("glossary", ""))
     batches = split_groups(groups, max_sec)
@@ -213,14 +248,18 @@ def test_audio(cfg: dict) -> str:
     """设置页的测试按钮：发 1.5 秒提示音，确认 Key、模型都能用"""
     base, key, model = audio_endpoint(cfg)
     if not key:
-        raise RuntimeError("还没填写 OpenAI 的 API Key")
+        raise RuntimeError(_key_missing(base))
     t = np.arange(int(SR * 1.5)) / SR
     pcm = (np.sin(2 * np.pi * 440 * t) * 8000).astype(np.int16)
-    r = HTTP.post(f"{base}/chat/completions", timeout=TIMEOUT,
-                   headers={"Authorization": f"Bearer {key}", "content-type": "application/json"},
-                   json={"model": model, "modalities": ["text"], "messages": [{"role": "user", "content": [
-                       {"type": "text", "text": "这是一段测试音频。请用一句中文描述你听到了什么。"},
-                       {"type": "input_audio", "input_audio": {"data": wav_b64(pcm), "format": "wav"}}]}]})
+    msgs = [{"role": "user", "content": [
+        {"type": "text", "text": "这是一段测试音频。请用一句中文描述你听到了什么。"},
+        {"type": "input_audio", "input_audio": {"data": wav_b64(pcm), "format": "wav"}}]}]
+    body = _body(base, model, msgs, 2000)
+    body.pop("temperature", None)
+    body.pop("max_tokens", None)
+    r = client_for(base).post(f"{base}/chat/completions", timeout=TIMEOUT,
+                              headers={"Authorization": f"Bearer {key}", "content-type": "application/json"},
+                              json=body)
     if r.status_code >= 300:
         raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
     return f"AI 能听到录音（{model}）：{(r.json()['choices'][0]['message'].get('content') or '').strip()[:80]}"

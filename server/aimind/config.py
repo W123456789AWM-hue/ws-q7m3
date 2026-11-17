@@ -24,6 +24,8 @@ DEFAULTS: dict = {
     "stt_model": "whisper-1",
     # ---- AI 听录音复盘（默认）----
     "review_input": "audio",          # audio = AI 直接听录音；text = 先本地识别成文字再复盘（旧方式）
+    "audio_vendor": "openai",         # 听录音用哪家：openai（含其他兼容接口）/ google（Gemini）
+    "google_api_key": "",             # Google AI Studio 的 API Key（听录音、文字 AI 选 Google 时共用）
     "audio_base_url": "https://api.openai.com/v1",
     "audio_api_key": "",
     "audio_model": "gpt-audio-1.5",
@@ -32,7 +34,7 @@ DEFAULTS: dict = {
     "realtime_min_sec": 5,            # 实时复盘：一段少于多少秒语音先攒着
     "review_min_sec": 30,             # 周期复盘：新语音少于多少秒就跳过这一轮
     # ---- AI 复盘 ----
-    "llm_provider": "openai",         # openai = 任何 OpenAI 兼容接口（含本机 Ollama）；anthropic = Claude
+    "llm_provider": "openai",         # openai = OpenAI 兼容接口（含本机 Ollama）；anthropic = Claude；google = Gemini
     "llm_base_url": "https://api.siliconflow.com/v1",
     "llm_api_key": "",
     "llm_model": "",

@@ -3,7 +3,7 @@
 发布新版本：改这里 → 提交 → 打同名标签（git tag v0.9.2 && git push origin v0.9.2）→ 云端自动打包并发布。
 （云端会检查标签和这里是否一致；手机 App 的版本号也从标签来。）
 """
-VERSION = "0.10.6"
+VERSION = "0.11.0"
 
 # 在线更新：发布仓库（公开，只放安装包）的最新版本清单 + 清单的签名公钥（私钥只在 GitHub 的加密设置里）
 UPDATE_REPO = "W123456789AWM-hue/aimind-releases"
