@@ -79,6 +79,7 @@ jobs:
           name: desktop-windows
           path: server/dist/*
           if-no-files-found: error
+          retention-days: 3       # 只是中转给发布任务用，几天就够（免费账号存储只有 0.5GB）
 
   mac:
     name: 电脑端 Mac (${{ matrix.arch }})
@@ -124,6 +125,7 @@ jobs:
           name: desktop-mac-${{ matrix.arch }}
           path: server/dist/*.dmg
           if-no-files-found: error
+          retention-days: 3       # 只是中转给发布任务用，几天就够（免费账号存储只有 0.5GB）
 
   android:
     name: 手机端 安卓
@@ -162,6 +164,7 @@ jobs:
           name: mobile-android-apk
           path: mobile/build/app/outputs/flutter-apk/AIMind-*.apk
           if-no-files-found: error
+          retention-days: 3       # 只是中转给发布任务用，几天就够（免费账号存储只有 0.5GB）
 
   ios:
     name: 手机端 iPhone
@@ -206,6 +209,7 @@ jobs:
           name: mobile-ios-ipa
           path: mobile/AIMind-*.ipa
           if-no-files-found: error
+          retention-days: 3       # 只是中转给发布任务用，几天就够（免费账号存储只有 0.5GB）
 
   release:
     name: 发布在线更新
