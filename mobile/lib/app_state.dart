@@ -60,6 +60,7 @@ class AppState extends ChangeNotifier {
 
   /// 发布仓库里的最新版本号（比当前新才有值）：设置页和底部导航上显示小红点
   String newVersion = '';
+  String newVersionNotes = '';
 
   void _localChanged() {
     if (standalone) view = engine.view(recording: recording, stream: spool.stream);
@@ -104,6 +105,7 @@ class AppState extends ChangeNotifier {
       _tick++;
       if (_tick % 4 == 0) unawaited(_checkNetwork());
       if (_tick % 75 == 0) unawaited(feedback.retryPending()); // 每 5 分钟重发一次没发出去的反馈
+      if (_tick % 5400 == 0 && settings.autoCheckUpdate) unawaited(checkUpdate()); // 每 6 小时看一次新版本
       // 用移动网络时少刷新一点，省流量
       if (standalone) {
         unawaited(engine.kick()); // 上次没处理完的接着处理
@@ -206,6 +208,7 @@ class AppState extends ChangeNotifier {
       final m = await MobileUpdater(mirror: settings.updateMirror).fetchManifest();
       final v = '${m['version']}';
       newVersion = newer(v, appVersion) ? v : '';
+      newVersionNotes = '${m['notes'] ?? ''}';
       notifyListeners();
     } catch (_) {}
   }

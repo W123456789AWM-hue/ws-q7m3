@@ -474,7 +474,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 (v) => s.wifiOnly = v),
             if (!s.standalone) _switch('用移动网络时压缩后再传', '流量约为原来的 1/4，对识别准确度影响很小', s.compressOnCellular,
                 (v) => s.compressOnCellular = v),
-            _switch(s.standalone ? '没人说话的片段不发给 AI' : '没人说话的片段不上传', s.standalone ? '省钱：AI 听录音按时长计费' : '省流量、省电，也省 NAS 空间', s.skipSilence,
+            _switch(s.standalone ? '没人说话的片段不发给 AI' : '没人说话的片段不上传', s.standalone ? '安静或只有杂音（风扇、键盘、车流…）的片段不发。省钱：AI 听录音按时长计费' : '安静或只有杂音（风扇、键盘、车流…）的片段不传。省流量、省电，也省 NAS 空间', s.skipSilence,
                 (v) => s.skipSilence = v),
             _switch('打开 App 就自动开始录音', '适合全天候使用', s.autoStart, (v) => s.autoStart = v),
             _switch('麦克风自动增益', '手机离得远、声音小时有帮助（下次开始录音生效）', s.micAutoGain,
@@ -495,7 +495,7 @@ class _SettingsPageState extends State<SettingsPage> {
               s.soundClicks = v;
               Sfx.clicks = v;
             }),
-            _switch('自动检查新版本', '打开 App 时看一眼有没有新版本，有的话在「设置」上显示小蓝点', s.autoCheckUpdate,
+            _switch('自动检查新版本', '打开 App 时和之后每 6 小时看一眼，有新版本会弹窗提醒（同一个版本只提醒一次）', s.autoCheckUpdate,
                 (v) => s.autoCheckUpdate = v),
             UpdateSection(app: app),
             FeedbackSection(app: app),

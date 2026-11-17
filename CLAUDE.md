@@ -46,6 +46,8 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
   Mac 用脚本 `_MAC_SCRIPT` 替换 .app（隐藏的临时副本、核对版本号、失败弹窗并打开 dmg，日志 ~/Library/Logs/AIMind-update.log）。
   **更新脚本是旧版程序执行的**：改了它，要等用户装上新版之后的下一次更新才生效。
   云端每次打包都会真的跑一遍：Windows 覆盖安装（工作目录在安装文件夹里）、Mac 用脚本替换 .app。录音中不更新。手机 App 通过电脑的 `/api/update/mobile`、`/api/update/file/…` 更新。
+- 发现新版本时提醒：电脑端右下角弹卡片（`js/update.js` 的 `popup`，localStorage `aimind.updNotified` 记住提醒过的版本）；
+  手机端 Shell 弹对话框（`settings.updateNotified`），启动时和每 6 小时检查一次。同一个版本只提醒一次。
 - 本机测试更新：设置项 `update_manifest_url` 指向自己搭的发布目录（见 tests/test_e2e.py 的 test_online_update_*）。
 
 ## 用户反馈
@@ -142,6 +144,10 @@ Windows 上打包要放在短路径（`%LOCALAPPDATA%\ai_mind_build`），工程
 
 - 提示词里固定不变的部分（系统提示、关于我、常用词、额外要求）放最前面，每次都变的（上次复盘、时间范围、内容）放后面——这样能命中提示缓存。
 - 模型输出的 JSON 解析失败时用 `llm.repair_json`（只花文字 token），不要把录音重发一遍。
+- 杂音过滤：`audio/vad.py` 的 `looks_like_speech`（看有没有连续、会变化的音高）判断一句“话”是不是人声，不是就不存、不发 AI
+  （设置 `noise_filter`）。手机端 `audio.dart` 的 `looksLikeSpeech` 是同一套算法和参数，改一边要同步改另一边；
+  手机在「没人说话的片段不上传」开着时把只有杂音的片也标成静音。测试里的“说话”要用有音高的声音（`_talk`、`device_sim.synth`），白噪声会被过滤。
+- AI 接口返回 5xx（Gemini 的 high demand）：`llm.post_retry` / 手机 `sendRetry` 等几秒重试，Gemini 最后换 `gemini-flash-lite-latest`。
 - 每次调用 AI 后 `usage.record()` 记一笔，界面状态栏和设置里能看到。
 
 ## 改代码的习惯

@@ -40,8 +40,9 @@ class AppSettings {
   bool splash = true; // 打开 App 时播放启动动画
   bool splashSound = true; // 启动动画的音效
   bool soundClicks = true; // 按钮音效
-  bool autoCheckUpdate = true; // 打开 App 时自动检查新版本（每天最多一次）
+  bool autoCheckUpdate = true; // 自动检查新版本（打开 App 时和之后每 6 小时），有新版本弹窗提醒
   String updateMirror = ''; // 下载更新用的镜像（一般不用填）
+  String updateNotified = ''; // 已经弹窗提醒过的新版本（同一个版本只提醒一次）
 
   File? file;
 
@@ -77,6 +78,7 @@ class AppSettings {
         'soundClicks': soundClicks,
         'autoCheckUpdate': autoCheckUpdate,
         'updateMirror': updateMirror,
+        'updateNotified': updateNotified,
       };
 
   void apply(Map<String, dynamic> m) {
@@ -125,6 +127,7 @@ class AppSettings {
     soundClicks = b('soundClicks', soundClicks);
     autoCheckUpdate = b('autoCheckUpdate', autoCheckUpdate);
     updateMirror = s('updateMirror', updateMirror).trim();
+    updateNotified = s('updateNotified', updateNotified);
   }
 
   static String newDeviceId() {

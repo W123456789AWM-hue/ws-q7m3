@@ -30,6 +30,7 @@ DEFAULTS: dict = {
     "audio_api_key": "",
     "audio_model": "gpt-audio-1.5",
     "audio_max_min": 8,               # 每次最多发多少分钟录音给 AI（太长会分批）
+    "noise_filter": True,             # 没人说话的杂音（风扇、键盘、车流…）不发给 AI、不做识别
     "audio_trim_silence": True,       # 发给 AI 前去掉每句前后多余的静音（按时长计费，省钱，不影响内容）
     "realtime_min_sec": 5,            # 实时复盘：一段少于多少秒语音先攒着
     "review_min_sec": 30,             # 周期复盘：新语音少于多少秒就跳过这一轮

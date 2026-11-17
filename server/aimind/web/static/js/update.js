@@ -12,6 +12,28 @@ function renderBadge() {
   const show = !!u?.available;
   b.hidden = !show;
   if (show) b.querySelector('span').textContent = `新版本 ${u.latest}`;
+  popup();
+}
+
+// ---- 发现新版本：右下角弹一张卡片告诉用户（同一个版本只弹一次，记在本机） ----
+const SEEN = 'aimind.updNotified';
+const seen = () => { try { return localStorage.getItem(SEEN) || ''; } catch { return ''; } };
+const markSeen = v => { try { localStorage.setItem(SEEN, v); } catch { /* 存不了就下次再提醒 */ } };
+
+function popup() {
+  const u = state.update;
+  if (!u?.available || u.downloading || u.installing || seen() === u.latest || $('updPop')) return;
+  markSeen(u.latest);
+  const card = document.createElement('div');
+  card.className = 'upd-pop';
+  card.id = 'updPop';
+  card.setAttribute('role', 'dialog');
+  card.innerHTML = `<b><i></i>发现新版本 ${esc(u.latest)}</b>
+    ${u.notes ? `<div class="md">${md(u.notes)}</div>` : ''}
+    <small>当前版本 ${esc(u.current || '')}。更新大约 10 秒，录音、复盘和设置都不受影响。</small>
+    <div class="acts"><button data-action="updLater">以后再说</button>
+      <button class="primary" data-action="updOpen">现在更新</button></div>`;
+  document.body.append(card);
 }
 
 /** 设置「通用 → 软件更新」里的内容 */
@@ -42,6 +64,8 @@ export async function loadUpdate() {
 
 export function initUpdate() {
   actions({
+    updLater: () => $('updPop')?.remove(),
+    updOpen: () => { $('updPop')?.remove(); $('updBadge').click(); },
     checkUpdate: async () => {
       state.update = {...(state.update || {}), checking: true}; emit('update-changed');
       state.update = await api('/api/update/check');

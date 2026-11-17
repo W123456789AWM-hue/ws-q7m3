@@ -10,6 +10,7 @@ import 'home_page.dart';
 import 'settings_page.dart';
 import 'splash.dart';
 import 'theme.dart';
+import 'update_section.dart';
 
 /// App 的外壳：底部四个标签（录音 / 报告 / 历史 / 设置）+ 启动动画。
 /// 切换标签时内容淡入并轻微放大；每个标签第一次点到才创建，之后保留状态（设置填到一半切走不会丢）。
@@ -33,6 +34,53 @@ class _ShellState extends State<Shell> {
     (Icons.history_rounded, Icons.history_rounded, '历史'),
     (Icons.settings_outlined, Icons.settings, '设置'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.app.addListener(_notifyUpdate);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyUpdate());
+  }
+
+  @override
+  void dispose() {
+    widget.app.removeListener(_notifyUpdate);
+    super.dispose();
+  }
+
+  /// 发现新版本：弹窗告诉用户（同一个版本只提醒一次；启动动画放完再弹）
+  void _notifyUpdate() {
+    final app = widget.app, v = app.newVersion;
+    if (!mounted || _splash || v.isEmpty || v == app.settings.updateNotified) return;
+    app.settings.updateNotified = v;
+    app.settings.save();
+    final notes = app.newVersionNotes.trim();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('发现新版本 $v'),
+        content: SingleChildScrollView(
+          child: Text(
+              '${notes.isEmpty ? '' : '$notes\n\n'}当前版本 $appVersion。更新只需一两分钟，录音和复盘记录都不受影响。'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('以后再说')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('软件更新')),
+                  body: ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 32), children: [UpdateSection(app: app)]),
+                ),
+              ));
+            },
+            child: const Text('现在更新'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _go(int i) {
     if (i == _tab) return;
@@ -109,7 +157,10 @@ class _ShellState extends State<Shell> {
           ),
         ),
       ),
-      if (_splash) Positioned.fill(child: SplashOverlay(onDone: () => setState(() => _splash = false))),
+      if (_splash) Positioned.fill(child: SplashOverlay(onDone: () {
+        setState(() => _splash = false);
+        _notifyUpdate();
+      })),
     ]);
   }
 }

@@ -44,6 +44,7 @@ export const CATEGORIES = [
       {k: 'google_api_key', label: 'Google API Key', desc: '在 aistudio.google.com 点「Get API key」生成。国内要开代理（程序会自动用系统代理）',
         type: 'password', when: c => google(c) || c.llm_provider === 'google', kw: '密钥 key google gemini 谷歌'},
       {k: 'audio_model', label: '听录音的模型', desc: '留空用默认：OpenAI 是 gpt-audio-1.5，Google 是 gemini-3.8-flash', type: 'text', when: audioMode, kw: 'gpt audio gemini 模型'},
+      {k: 'noise_filter', label: '过滤杂音', desc: '风扇、键盘、车流、翻东西这类没人说话的声音不发给 AI（省钱，复盘也更干净）。如果发现有说话没被记下，可以关掉', type: 'bool', kw: '噪音 杂音 省钱'},
       {k: 'audio_trim_silence', label: '发送前去掉多余的静音', desc: '只去掉每句话前后的空白，省 10% 左右的 token，不影响内容', type: 'bool', when: audioMode, kw: '省钱 token 静音'},
       {k: 'audio', label: '测试 AI 能不能听到录音', type: 'test'},
       {k: 'audio_base_url', label: '接口地址', desc: '默认 https://api.openai.com/v1，一般不用改', type: 'text', adv: true, kw: 'url 代理 base',

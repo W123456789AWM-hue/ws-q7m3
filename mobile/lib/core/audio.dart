@@ -227,3 +227,110 @@ class WavPartWriter {
     }
   }
 }
+
+// ---------------- 是不是人在说话（过滤杂音） ----------------
+// 只看音量的话，风扇、键盘、车流、翻东西也会被当成“有人说话”发给 AI（白花钱，还干扰复盘）。
+// 人说话时元音有明显的音高（70~400Hz 的周期性），而且音高在变；杂音没有周期性，电器嗡嗡声音高一成不变。
+// 和电脑端 server/aimind/audio/vad.py 的 looks_like_speech 是同一套算法、同一组参数。
+const int _vWin = 320, _vHop = 160, _vLagLo = 18, _vLagHi = 115, _vRun = 4;
+const double _vR = 0.35, _vMinSec = 0.08;
+
+/// 每个“有音高”的帧：[第几帧, 周期采样数 @8kHz]
+List<List<int>> voicedFrames(Int16List pcm) {
+  final n = pcm.length ~/ 2;
+  final x = Float64List(n);
+  for (var i = 0; i < n; i++) {
+    x[i] = (pcm[2 * i] + pcm[2 * i + 1]) / 2; // 16k → 8k
+  }
+  if (n < _vWin) return [];
+  final count = (n - _vWin) ~/ _vHop + 1;
+  final db = Float64List(count);
+  var maxDb = -1e9;
+  for (var f = 0; f < count; f++) {
+    final o = f * _vHop;
+    var m = 0.0;
+    for (var i = 0; i < _vWin; i++) {
+      m += x[o + i];
+    }
+    m /= _vWin;
+    var e = 0.0;
+    for (var i = 0; i < _vWin; i++) {
+      final v = x[o + i] - m;
+      e += v * v;
+    }
+    db[f] = 10 * math.log(e / _vWin + 1e-6) / math.ln10;
+    if (db[f] > maxDb) maxDb = db[f];
+  }
+  final floor = 20 * math.log(32768 * math.pow(10, -55 / 20)) / math.ln10;
+  final gate = math.max(maxDb - 30, floor);
+  final out = <List<int>>[];
+  final w = Float64List(_vWin);
+  final sq = Float64List(_vWin);
+  final r = Float64List(_vLagHi - _vLagLo + 1);
+  for (var f = 0; f < count; f++) {
+    if (db[f] <= gate) continue;
+    final o = f * _vHop;
+    var m = 0.0;
+    for (var i = 0; i < _vWin; i++) {
+      m += x[o + i];
+    }
+    m /= _vWin;
+    var acc = 0.0;
+    for (var i = 0; i < _vWin; i++) {
+      w[i] = x[o + i] - m;
+      acc += w[i] * w[i];
+      sq[i] = acc;
+    }
+    for (var lag = _vLagLo; lag <= _vLagHi; lag++) {
+      var num = 0.0;
+      for (var i = 0; i + lag < _vWin; i++) {
+        num += w[i] * w[i + lag];
+      }
+      final e1 = acc - sq[lag - 1]; // w[lag:] 的能量
+      final e0 = sq[_vWin - 1 - lag]; // w[:N-lag] 的能量
+      r[lag - _vLagLo] = num / math.sqrt(e0 * e1 + 1e-9);
+    }
+    var best = -1, bestR = -1.0;
+    for (var k = 1; k < r.length - 1; k++) {
+      if (r[k] > r[k - 1] && r[k] >= r[k + 1] && r[k] > _vR && r[k] > bestR) {
+        best = k;
+        bestR = r[k];
+      }
+    }
+    if (best >= 0) out.add([f, best + _vLagLo]);
+  }
+  return out;
+}
+
+/// 只留连续 [_vRun] 帧以上、音高平滑变化的浊音（真说话的元音是连着的，杂音凑出的“周期”是零散的）
+List<int> voicedRuns(List<List<int>> frames) {
+  final out = <int>[];
+  var run = <int>[];
+  List<int>? prev;
+  for (final fr in frames) {
+    if (prev != null && fr[0] == prev[0] + 1 && (fr[1] - prev[1]).abs() <= 0.15 * prev[1]) {
+      run.add(fr[1]);
+    } else {
+      if (run.length >= _vRun) out.addAll(run);
+      run = [fr[1]];
+    }
+    prev = fr;
+  }
+  if (run.length >= _vRun) out.addAll(run);
+  return out;
+}
+
+/// 这段录音里像不像有人在说话。宁可放过，不要误删
+bool looksLikeSpeech(Int16List pcm) {
+  final lags = voicedRuns(voicedFrames(pcm));
+  if (lags.length * _vHop / 8000 < _vMinSec) return false;
+  if (lags.length >= 25) {
+    final c = <int, int>{};
+    for (final l in lags) {
+      c[l] = (c[l] ?? 0) + 1;
+    }
+    final top = c.values.toList()..sort((a, b) => b - a);
+    if (top.take(3).fold<int>(0, (a, b) => a + b) / lags.length > 0.9) return false; // 音高一成不变：嗡嗡声、提示音
+  }
+  return true;
+}

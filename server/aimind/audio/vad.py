@@ -176,3 +176,79 @@ def read_wav_16k(path: Path) -> np.ndarray:
         n = int(len(a) * SR / sr)
         a = np.interp(np.linspace(0, len(a) - 1, n), np.arange(len(a)), a)
     return np.clip(a, -32768, 32767).astype(np.int16)
+
+
+# ---------------- 是不是人在说话（过滤杂音） ----------------
+# 切句只看音量：风扇、键盘、车流、翻东西也会被当成“一句话”发给 AI（白花钱，还干扰复盘）。
+# 人说话时元音有明显的音高（嗓子振动，70~400Hz 的周期性），而且音高在变；杂音没有周期性，
+# 电器嗡嗡声虽有周期但音高一成不变。按这两点判断。手机端 audio.dart 里是同一套算法。
+VOICE_SR = 8000            # 降到 8kHz 算，省一半以上计算
+VOICE_WIN = 320            # 40ms
+VOICE_HOP = 160            # 20ms
+VOICE_LAG = (18, 115)      # 8kHz 下的周期：444Hz ~ 70Hz
+VOICE_R = 0.35             # 周期性（归一化自相关，只认局部峰）高于这个算“浊音”
+VOICE_RUN = 4              # 连续几帧（80ms）有音高才算元音
+VOICE_MIN_SEC = 0.08       # 一句里元音加起来至少多少秒（“对”“嗯”这种单字也要留下）
+# 以上参数用 Windows 自带的中英文语音（干净 / 加噪到 5dB）和白噪、风扇、轰隆声、嗡嗡声、提示音、
+# 键盘声、咔哒声调过：语音全保留、杂音全过滤
+
+
+def voiced_frames(pcm: np.ndarray) -> list[tuple[int, int]]:
+    """返回每个“有音高”的帧：(第几帧, 周期采样数 @8kHz)。只看够响的帧"""
+    x = pcm.astype(np.float32)
+    n = len(x) // 2 * 2
+    x = (x[:n:2] + x[1:n:2]) / 2                       # 16k → 8k
+    if len(x) < VOICE_WIN:
+        return []
+    starts = range(0, len(x) - VOICE_WIN + 1, VOICE_HOP)
+    frames = np.stack([x[i:i + VOICE_WIN] for i in starts])
+    frames -= frames.mean(axis=1, keepdims=True)
+    energy = (frames ** 2).mean(axis=1)
+    db = 10 * np.log10(energy + 1e-6)
+    loud = db > max(db.max() - 30, 10 * math.log10((32768 * 10 ** (-55 / 20)) ** 2))
+    lo, hi = VOICE_LAG
+    spec = np.fft.rfft(frames, 1024, axis=1)
+    ac = np.fft.irfft(np.abs(spec) ** 2, 1024, axis=1)[:, :hi + 2]
+    sq = np.cumsum(frames ** 2, axis=1)
+    tot = sq[:, -1:]
+    out = []
+    for i in np.where(loud)[0]:
+        lags = np.arange(lo, hi + 1)
+        e1 = tot[i, 0] - sq[i, lags - 1]               # x[l:] 的能量
+        e0 = sq[i, VOICE_WIN - 1 - lags]               # x[:N-l] 的能量
+        r = ac[i, lags] / np.sqrt(e0 * e1 + 1e-9)
+        peak = (r[1:-1] > r[:-2]) & (r[1:-1] >= r[2:]) & (r[1:-1] > VOICE_R)
+        if peak.any():
+            cand = np.where(peak)[0] + 1
+            out.append((int(i), int(lags[cand[np.argmax(r[cand])]])))
+    return out
+
+
+def voiced_runs(frames: list[tuple[int, int]]) -> list[int]:
+    """只留连续 3 帧以上（60ms）、音高平滑变化的浊音：真说话的元音是连着的，
+    杂音偶然凑出的“周期”是零散的。返回这些帧的周期"""
+    out: list[int] = []
+    run: list[int] = []
+    prev = None
+    for i, lag in frames:
+        if prev and i == prev[0] + 1 and abs(lag - prev[1]) <= 0.15 * prev[1]:
+            run.append(lag)
+        else:
+            if len(run) >= VOICE_RUN:
+                out += run
+            run = [lag]
+        prev = (i, lag)
+    if len(run) >= VOICE_RUN:
+        out += run
+    return out
+
+
+def looks_like_speech(pcm: np.ndarray) -> bool:
+    """这句“话”像不像有人在说话。宁可放过，不要误删：拿不准时算是人声"""
+    lags = voiced_runs(voiced_frames(pcm))
+    if len(lags) * VOICE_HOP / VOICE_SR < VOICE_MIN_SEC:          # 没有连着有音高的部分：杂音
+        return False
+    top3 = sum(c for _, c in collections.Counter(lags).most_common(3))
+    if len(lags) >= 25 and top3 / len(lags) > 0.9:     # 音高一成不变：电器嗡嗡声、提示音
+        return False
+    return True

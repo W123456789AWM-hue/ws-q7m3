@@ -102,7 +102,9 @@ class ChunkSpool {
     final frames = _det?.speechFrames ?? 0;
     final voiced = !settings.skipSilence ||
         // 这一片里至少有 2 帧（60 毫秒）声音；只有 1 帧多半是上一片末尾的余音
-        frames - _framesAtStart >= 2;
+        (frames - _framesAtStart >= 2 &&
+            // 只有杂音（风扇、键盘、车流…）没人说话，也算没声音
+            looksLikeSpeech(Uint8List.fromList(bytes).buffer.asInt16List()));
     _framesAtStart = frames;
     final kind = !voiced ? 's' : (compress ? 'a' : 'v');
     final name = '${stream}_${_seq.toString().padLeft(8, '0')}_'

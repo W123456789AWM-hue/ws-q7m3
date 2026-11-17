@@ -545,3 +545,32 @@ def test_busy_server_retries_then_falls_back(monkeypatch):
     seq[:] = [503, 503, 503, 404]              # 备用模型也不能用：报原来的“太忙”
     with pytest.raises(RuntimeError, match="太忙"):
         llm.chat(cfg, "s", "u")
+
+
+def test_noise_is_not_sent_to_ai():
+    """杂音（白噪、风扇轰隆、键盘咔哒、电器嗡嗡、提示音）判为不是人声；有音高起伏的元音、单字都算人声"""
+    from aimind.audio.vad import looks_like_speech
+    sr, rng = 16000, np.random.default_rng(0)
+
+    def vowel(f0s, sec):
+        t = np.arange(int(sr * sec)) / sr
+        ph = 2 * np.pi * np.cumsum(np.interp(t, np.linspace(0, sec, len(f0s)), f0s)) / sr
+        s = sum(np.sin(k * ph) / k for k in range(1, 25)) * (0.5 + 0.5 * np.sin(2 * np.pi * 4 * t) ** 2)
+        return (s * 6000).astype(np.int16)
+
+    t = np.arange(sr * 3) / sr
+    w = rng.normal(0, 1, len(t))
+    noises = {
+        "白噪": w * 3000,
+        "轰隆": np.cumsum(w) * 30,
+        "嗡嗡": np.sin(2 * np.pi * 100 * t) * 5000 + np.sin(2 * np.pi * 200 * t) * 2000 + w * 200,
+        "提示音": np.sin(2 * np.pi * 440 * t) * 5000 + w * 50,
+        "咔哒": np.where(rng.random(len(t)) < 0.003, 20000, 0) + w * 100,
+    }
+    for name, x in noises.items():
+        assert not looks_like_speech(np.clip(x, -32768, 32767).astype(np.int16)), name
+    assert looks_like_speech(vowel([120, 180, 140], 2))
+    assert looks_like_speech(vowel([230, 300, 250], 2))
+    assert looks_like_speech(vowel([150, 130], 0.3))                   # 单字
+    noisy = vowel([130, 170, 150], 2) + rng.normal(0, 600, sr * 2)      # 有底噪的说话
+    assert looks_like_speech(np.clip(noisy, -32768, 32767).astype(np.int16))

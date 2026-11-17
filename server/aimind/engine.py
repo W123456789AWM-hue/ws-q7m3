@@ -24,6 +24,7 @@ from . import config as config_mod
 from . import nas
 from .audio import SR, Segmenter, Utterance, read_wav_16k
 from .audio.mic import MIC_DEVICE, MicSource
+from .audio.vad import looks_like_speech
 from .audio.wavstore import WavStore
 from .fsutil import append_jsonl
 from .review import daily, prompts
@@ -38,7 +39,7 @@ LIVE_KEYS = ("review_input", "audio_vendor", "google_api_key", "audio_base_url",
              "realtime_min_sec", "review_min_sec", "realtime_min_chars", "review_min_chars",
              "review_mode", "review_interval_min", "pause_close_sec", "max_paragraph_sec",
              "about_me", "extra_instructions", "glossary", "llm_provider", "llm_base_url",
-             "llm_api_key", "llm_model", "audio_trim_silence", "session_review", "nas_dir",
+             "llm_api_key", "llm_model", "audio_trim_silence", "noise_filter", "session_review", "nas_dir",
              "phone_idle_stop_min", "vad_margin_db")
 
 
@@ -247,6 +248,10 @@ class Engine:
         while True:
             s, tr, u = self.utt_q.get()
             try:
+                if self.cfg.get("noise_filter", True) and not looks_like_speech(u.pcm):
+                    with self.lock:
+                        s.noise_skipped += 1
+                    continue
                 if s.mode == "audio":   # AI 听录音：只把这句话存成小片段，复盘时交给 AI
                     clips = s.dir / "clips"
                     clips.mkdir(exist_ok=True)

@@ -49,6 +49,7 @@ class Session:
         self.nas_status = ""
         self.last_review: datetime = self.started   # 上次复盘到的录音时间（周期复盘用）
         self.pending_utts = 0                 # 还没处理完的句子
+        self.noise_skipped = 0                # 被当作杂音没发给 AI 的“句子”数
         self.pending_reviews = 0              # 还没做完的复盘
 
     # ---------- 查询 ----------

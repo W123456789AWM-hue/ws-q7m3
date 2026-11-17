@@ -22,6 +22,24 @@ Uint8List _noise(double seconds, double amp) {
   return bd.buffer.asUint8List();
 }
 
+/// 像说话的声音：音高在 120~200Hz 之间起伏的元音（带谐波），音量像音节一样一起一伏
+Uint8List _talk(double seconds, double amp) {
+  final n = (kSampleRate * seconds).round();
+  final bd = ByteData(n * 2);
+  var ph = 0.0;
+  for (var i = 0; i < n; i++) {
+    final t = i / kSampleRate;
+    ph += 2 * math.pi * (160 + 40 * math.sin(2 * math.pi * 0.7 * t)) / kSampleRate;
+    var s = 0.0;
+    for (var k = 1; k < 20; k++) {
+      s += math.sin(k * ph) / k;
+    }
+    final env = 0.5 + 0.5 * math.pow(math.sin(2 * math.pi * 4 * t), 2);
+    bd.setInt16(i * 2, (amp * 16000 * s * env).round().clamp(-32768, 32767), Endian.little);
+  }
+  return bd.buffer.asUint8List();
+}
+
 /// 假的 AI 接口：收到录音就按标注里的段落编号返回听写和复盘；收到文字就返回一份总复盘
 class FakeAi {
   late HttpServer server;
@@ -115,9 +133,9 @@ void main() {
 
     spool.start();
     final sid = spool.stream!;
-    feed(_noise(20, 0.3)); // 第 1 段
+    feed(_talk(20, 0.3)); // 第 1 段
     feed(_noise(10, 0.0005)); // 安静：另起一段
-    feed(_noise(35, 0.3)); // 第 2 段（满 1 分钟：触发第一次复盘）
+    feed(_talk(30, 0.3)); // 第 2 段（满 1 分钟：触发第一次复盘）
     await engine.kick();
     var s = engine.session(sid)!;
     expect(ai.audioCalls, 1);
@@ -130,7 +148,7 @@ void main() {
 
     // 接口坏了：这次复盘记为失败，录音留着
     feed(_noise(10, 0.0005));
-    feed(_noise(20, 0.3)); // 第 3 段
+    feed(_talk(20, 0.3)); // 第 3 段
     ai.failNext = 1;
     spool.stop();
     await engine.kick();
@@ -173,7 +191,7 @@ void main() {
     final engine = LocalEngine(Directory('${tmp.path}/local'), spoolDir, st);
     spool.start();
     final sid = spool.stream!;
-    final b = _noise(10, 0.3);
+    final b = _talk(10, 0.3);
     for (var i = 0; i < b.length; i += 3200) {
       t = t.add(const Duration(milliseconds: 100));
       spool.add(Uint8List.sublistView(b, i, math.min(i + 3200, b.length)));
