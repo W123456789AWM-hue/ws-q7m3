@@ -40,6 +40,7 @@ docs/iphone-install.md  iPhone 安装：免费 Apple ID 自签 / 付费证书云
 - **发布新版本**：改 VERSION → 提交（提交说明就是给用户看的更新说明）→ `git tag v<版本> && git push origin v<版本>`。
   云端 `.github/workflows/build-all.yml` 打包四个平台，`release` 任务用 `packaging/make_release.py` 生成并签名 `latest.json`，
   上传到公开的发布仓库 `aimind-releases`（只放安装包）。标签和 VERSION 不一致会直接失败。
+  整套步骤（测试 → 提交 → 标签 → 等打包 → 核对 latest.json）写成了子代理 `.claude/agents/release.md`，发布时交给它。
 - 签名：Ed25519（`aimind/ed25519.py` 纯 Python）。公钥写在 version.py；私钥在 GitHub 仓库密钥 `UPDATE_SIGNING_KEY`，
   本机备份在 `%LOCALAPPDATA%\ai_mind_build\release-signing-key.txt`。**私钥丢了 = 已装的程序再也收不到更新**，不要提交进仓库。
 - 程序端 `aimind/updater.py`：检查（验签）→ 下载（核对大小 + sha256）→ Windows 调安装程序 `--silent --upgrade --wait-pid --relaunch`、
